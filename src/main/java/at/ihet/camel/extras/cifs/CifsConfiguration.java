@@ -135,7 +135,7 @@ public class CifsConfiguration extends GenericFileConfiguration {
         } else {
             setPort(uri.getPort());
         }
-        setDirectory(uri.getPath());
+        setDirectory(uri.getPath().replace("\\", "/"));
     }
 
     private SMB2Dialect resolveSmbDialect() {

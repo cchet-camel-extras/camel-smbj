@@ -31,7 +31,7 @@ import java.io.File;
  * @author Thomas Herzog <herzog.thomas81@gmail.com>
  * @since 10/26/2018
  */
-@UriEndpoint(scheme = "cifs", title = "CIFS", syntax = "cifs://server/share?username=user&password=secret[&domain=domain][&version=version]", consumerClass = CifsConsumer.class)
+@UriEndpoint(scheme = "cifs", title = "CIFS", syntax = "cifs://server[:port]/share[?options]", consumerClass = CifsConsumer.class)
 public class CifsEndpoint extends GenericFileEndpoint<DiskEntry> {
 
     public CifsEndpoint(final String endpointUri,
@@ -65,7 +65,7 @@ public class CifsEndpoint extends GenericFileEndpoint<DiskEntry> {
         final CifsConfiguration configuration = getConfiguration();
         CifsConsumer consumer = new CifsConsumer(this,
                                                  processor,
-                                                 new CifsFileOperations(new SMBClient(configuration.getSmbConfig()), configuration),
+                                                 new CifsFileOperations(new SMBClient(configuration.getSmbConfig())),
                                                  processStrategy != null ? processStrategy : createGenericFileStrategy());
         consumer.setMaxMessagesPerPoll(getMaxMessagesPerPoll());
         consumer.setEagerLimitMaxMessagesPerPoll(isEagerMaxMessagesPerPoll());
@@ -77,7 +77,7 @@ public class CifsEndpoint extends GenericFileEndpoint<DiskEntry> {
     @Override
     public CifsProducer createProducer() {
         final CifsConfiguration configuration = getConfiguration();
-        return new CifsProducer(this, new CifsFileOperations(new SMBClient(configuration.getSmbConfig()), configuration));
+        return new CifsProducer(this, new CifsFileOperations(new SMBClient(configuration.getSmbConfig())));
     }
 
     @Override
