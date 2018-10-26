@@ -15,21 +15,28 @@
  *****************************************************************/
 package at.ihet.camel.extras.cifs;
 
+import com.hierynomus.msfscc.fileinformation.FileAllInformation;
 import com.hierynomus.smbj.share.DiskEntry;
 import org.apache.camel.Message;
 import org.apache.camel.Processor;
 import org.apache.camel.component.file.GenericFile;
 import org.apache.camel.component.file.GenericFileConsumer;
 import org.apache.camel.component.file.GenericFileProcessStrategy;
+import org.apache.camel.util.FileUtil;
+import org.apache.camel.util.ObjectHelper;
 
+import java.io.IOException;
 import java.util.List;
 import java.util.Objects;
+import java.util.Optional;
 
 /**
  * @author Thomas Herzog <herzog.thomas81@gmail.com>
  * @since 10/26/2018
  */
 public class CifsConsumer extends GenericFileConsumer<DiskEntry> {
+
+    private String currentRelativePath = "";
 
     public CifsConsumer(final CifsEndpoint endpoint,
                         final Processor processor,
@@ -43,21 +50,89 @@ public class CifsConsumer extends GenericFileConsumer<DiskEntry> {
 
     @Override
     protected boolean pollDirectory(String fileName,
-                                    List<GenericFile<DiskEntry>> genericFiles,
+                                    List<GenericFile<DiskEntry>> fileList,
                                     int depth) {
-        return false;
+
+        log.trace(String.format("pollDirectory() running. My delay is [%s] and my strategy is [%s]", this.getDelay(), this.getPollStrategy().getClass().toString()));
+        log.trace(String.format("pollDirectory() fileName[%s]", fileName));
+
+        List<DiskEntry> smbFiles;
+        smbFiles = operations.listFiles(fileName);
+        for (DiskEntry diskEntry : smbFiles) {
+            if (!canPollMoreFiles(fileList)) {
+                return false;
+            }
+
+            if (diskEntry.getFileInformation(FileAllInformation.class).getStandardInformation().isDirectory()) {
+                if (endpoint.isRecursive()) {
+                    currentRelativePath = diskEntry.getFileName().split("/")[0] + "/";
+                    int nextDepth = depth++;
+                    pollDirectory(fileName + "/" + diskEntry.getFileName(), fileList, nextDepth);
+                } else {
+                    currentRelativePath = "";
+                }
+            } else {
+                try {
+                    GenericFile<DiskEntry> genericFile = asGenericFile(fileName, diskEntry);
+                    if (isValidFile(genericFile, false, smbFiles)) {
+                        fileList.add(asGenericFile(fileName, diskEntry));
+                    }
+                } catch (IOException e) {
+                    throw ObjectHelper.wrapRuntimeCamelException(e);
+                }
+            }
+        }
+        return true;
     }
 
     @Override
-    protected void updateFileHeaders(GenericFile<DiskEntry> file,
+    protected void updateFileHeaders(GenericFile<DiskEntry> genericFile,
                                      Message message) {
+        // TODO
+    }
 
+    // TODO: this needs some checking!
+    private GenericFile<DiskEntry> asGenericFile(String path,
+                                                 DiskEntry file) throws IOException {
+        CifsGenericFile answer = new CifsGenericFile();
+        answer.setAbsoluteFilePath(path + answer.getFileSeparator() + file.getFileName());
+        answer.setAbsolute(true);
+        answer.setEndpointPath("/");
+        answer.setFileNameOnly(file.getFileName());
+        answer.setFileLength(file.getFileInformation().getStandardInformation().getEndOfFile());
+        answer.setFile(file);
+        answer.setLastModified(file.getFileInformation().getBasicInformation().getChangeTime().toEpochMillis());
+        answer.setFileName(currentRelativePath + file.getFileName());
+        answer.setRelativeFilePath(file.getFileName());
+
+        log.trace("asGenericFile():");
+        log.trace(String.format("absoluteFilePath[%s] filenameonly[%s] filename[%s] relativepath[%s]",
+                                answer.getAbsoluteFilePath(),
+                                answer.getFileNameOnly(),
+                                answer.getFileName(),
+                                answer.getRelativeFilePath()));
+        return answer;
     }
 
     @Override
     protected boolean isMatched(GenericFile<DiskEntry> file,
                                 String doneFileName,
                                 List<DiskEntry> files) {
+        String onlyName = FileUtil.stripPath(doneFileName);
+
+        for (DiskEntry f : files) {
+            if (f.getFileName().equals(onlyName)) {
+                return true;
+            }
+        }
+
+        log.trace("Done file: {} does not exist", doneFileName);
         return false;
     }
+
+    @Override
+    protected boolean isRetrieveFile() {
+        return Optional.ofNullable(((CifsEndpoint) getEndpoint()).getConfiguration().getDownload()).orElse(false);
+    }
+
 }

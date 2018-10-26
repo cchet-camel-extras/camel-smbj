@@ -63,9 +63,11 @@ public class CifsEndpoint extends GenericFileEndpoint<DiskEntry> {
         }
 
         final CifsConfiguration configuration = getConfiguration();
+        final CifsFileOperations fileOperations = new CifsFileOperations(new SMBClient(configuration.getSmbConfig()));
+        fileOperations.setEndpoint(this);
         CifsConsumer consumer = new CifsConsumer(this,
                                                  processor,
-                                                 new CifsFileOperations(new SMBClient(configuration.getSmbConfig())),
+                                                 fileOperations,
                                                  processStrategy != null ? processStrategy : createGenericFileStrategy());
         consumer.setMaxMessagesPerPoll(getMaxMessagesPerPoll());
         consumer.setEagerLimitMaxMessagesPerPoll(isEagerMaxMessagesPerPoll());
@@ -77,7 +79,10 @@ public class CifsEndpoint extends GenericFileEndpoint<DiskEntry> {
     @Override
     public CifsProducer createProducer() {
         final CifsConfiguration configuration = getConfiguration();
-        return new CifsProducer(this, new CifsFileOperations(new SMBClient(configuration.getSmbConfig())));
+        final CifsFileOperations fileOperations = new CifsFileOperations(new SMBClient(configuration.getSmbConfig()));
+        fileOperations.setEndpoint(this);
+
+        return new CifsProducer(this, fileOperations);
     }
 
     @Override

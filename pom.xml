@@ -40,6 +40,7 @@
         <version.maven-surefire-plugin>2.22.1</version.maven-surefire-plugin>
         <version.maven-enforcer-plugin>3.0.0-M2</version.maven-enforcer-plugin>
         <version.maven-resources-plugin>3.1.0</version.maven-resources-plugin>
+        <version.maven-sources-plugin>3.0.1</version.maven-sources-plugin>
 
         <!-- Dependency versions -->
         <version.camel>2.22.1</version.camel>
@@ -71,6 +72,13 @@
             <groupId>com.hierynomus</groupId>
             <artifactId>smbj</artifactId>
             <version>${version.smbj}</version>
+            <exclusions>
+                <!-- Already provided by camel-core -->
+                <exclusion>
+                    <groupId>org.slf4j</groupId>
+                    <artifactId>slf4j-api</artifactId>
+                </exclusion>
+            </exclusions>
         </dependency>
     </dependencies>
 
@@ -144,6 +152,20 @@
                 <executions>
                     <execution>
                         <phase>process-resources</phase>
+                    </execution>
+                </executions>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-source-plugin</artifactId>
+                <version>${version.maven-sources-plugin}</version>
+                <executions>
+                    <execution>
+                        <id>attach-sources</id>
+                        <phase>verify</phase>
+                        <goals>
+                            <goal>jar-no-fork</goal>
+                        </goals>
                     </execution>
                 </executions>
             </plugin>

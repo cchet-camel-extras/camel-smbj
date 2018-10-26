@@ -53,8 +53,10 @@ public class CifsConfiguration extends GenericFileConfiguration {
     private Boolean dfs;
     @UriParam(name = "multiProtocol", defaultValue = "false", defaultValueNote = "Assuming that no multiple protocols are supported", description = "True if multi protocols are available, false otherwise", javaType = "java.lang.Boolean")
     private Boolean multiProtocol;
-    @UriParam(name = "signin", defaultValue = "false", defaultValueNote = "Assuming that no sign in is required", description = "True if sign in is required, false otherwise", javaType = "java.lang.Boolean")
-    private Boolean signin;
+    @UriParam(name = "signing", defaultValue = "false", defaultValueNote = "Assuming that no sign in is required", description = "True if sign in is required, false otherwise", javaType = "java.lang.Boolean")
+    private Boolean signing;
+    @UriParam(name = "download", defaultValue = "false", defaultValueNote = "Per default files are not downloaded", description = "True if file download is intended, false otherwise", javaType = "java.lang.Boolean")
+    private Boolean download;
     @UriParam(name = "shareName", description = "The shareName of the share", javaType = "java.lang.String")
     private String shareName;
     @UriParam(name = "uuid", description = "The uuid to use for the client", javaType = "java.lang.String")
@@ -82,12 +84,11 @@ public class CifsConfiguration extends GenericFileConfiguration {
     }
 
     public SmbConfig getSmbConfig() {
-        builder = builder.withClientGuid(UUID.fromString(uuid))
-                         .withDialects(resolveSmbDialect())
+        builder = builder.withDialects(resolveSmbDialect())
                          .withDfsEnabled(dfs)
                          .withMultiProtocolNegotiate(multiProtocol)
                          .withRandomProvider(new Random(System.currentTimeMillis()))
-                         .withSigningRequired(signin)
+                         .withSigningRequired(signing)
                          .withReadBufferSize(Optional.of(readBufferSize).orElse(bufferSize))
                          .withWriteBufferSize(Optional.of(writeBufferSize).orElse(bufferSize))
                          .withReadTimeout(Optional.of(readTimeout).orElse(timeout), TimeUnit.MILLISECONDS)
@@ -95,11 +96,14 @@ public class CifsConfiguration extends GenericFileConfiguration {
                          .withTransactTimeout(transactTimeout, TimeUnit.MILLISECONDS)
                          .withSoTimeout(socketTimeout);
 
+        if (uuid == null) {
+            builder.withClientGuid(UUID.fromString(uuid));
+        }
         return builder.build();
     }
 
     public AuthenticationContext createAuthenticationContext() {
-        if (!signin) {
+        if (!signing) {
             throw new IllegalStateException("Cannot create AuthenticationContext if no sign in is required");
         }
         return new AuthenticationContext(Optional.of(username).orElseThrow(() -> new IllegalArgumentException("Username cannot be null when using NTLM authentication")),
@@ -218,12 +222,20 @@ public class CifsConfiguration extends GenericFileConfiguration {
         this.multiProtocol = multiProtocol;
     }
 
-    public Boolean getSignin() {
-        return signin;
+    public Boolean getSigning() {
+        return signing;
     }
 
-    public void setSignin(Boolean signin) {
-        this.signin = signin;
+    public void setSigning(Boolean signing) {
+        this.signing = signing;
+    }
+
+    public Boolean getDownload() {
+        return download;
+    }
+
+    public void setDownload(Boolean download) {
+        this.download = download;
     }
 
     public String getShareName() {
