@@ -13,7 +13,7 @@
  See the License for the specific language governing permissions and
  limitations under the License.
  *****************************************************************/
-package at.ihet.camel.extras.cifs.util;
+package at.ihet.camel.extras.smbj;
 
 import com.hierynomus.smbj.SMBClient;
 import com.hierynomus.smbj.connection.Connection;
@@ -23,7 +23,6 @@ import org.slf4j.LoggerFactory;
 import java.io.IOException;
 import java.util.Map;
 import java.util.Objects;
-import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
@@ -42,29 +41,25 @@ public class ConnectionCache {
     private ConnectionCache() {
     }
 
-    public static Connection getOrCreateConnection(final SMBClient client,
-                                                   final String host,
-                                                   final Integer port) {
-        final String connectionKey = buildCacheKey(Objects.requireNonNull(host, "Cannot create connection for null host"),
-                                                   port);
-        Connection connection = CONNECTION_CACHE.computeIfAbsent(connectionKey, key -> createConnection(Objects.requireNonNull(client, "Cannot create connection for null client"), host, port));
+    public static Connection getConnectionAndCreateIfNecessary(final SMBClient client,
+                                                               final String endpointId,
+                                                               final String host,
+                                                               final Integer port) {
+        Connection connection = CONNECTION_CACHE.computeIfAbsent(Objects.requireNonNull(endpointId, "Cannot cache connection with null endpoint id"),
+                                                                 key -> createConnection(Objects.requireNonNull(client, "Cannot create connection for null client"), host, port));
         if (!connection.isConnected()) {
-            releaseConnection(client, host, port);
-            connection = CONNECTION_CACHE.putIfAbsent(connectionKey, createConnection(client, host, port));
+            releaseConnection(endpointId);
+            connection = CONNECTION_CACHE.putIfAbsent(endpointId, createConnection(client, host, port));
         }
 
         return connection;
     }
 
-    public static void releaseConnection(final SMBClient client,
-                                         final String host,
-                                         final Integer port) {
-        final String connectionKey = buildCacheKey(Objects.requireNonNull(host, "Cannot create connection for null host"),
-                                                   port);
-        final Connection connection = CONNECTION_CACHE.remove(connectionKey);
+    public static void releaseConnection(String endpointId) {
+        final Connection connection = CONNECTION_CACHE.remove(Objects.requireNonNull(endpointId, "Cannot release connection for null endpoint id"));
         if (connection != null) {
             try {
-                connection.close();
+                connection.close(true);
             } catch (IOException e) {
                 LOG.info("Could not close connection during release", e);
             }
@@ -82,10 +77,5 @@ public class ConnectionCache {
         } catch (IOException e) {
             throw new IllegalStateException("Connection cannot be created", e);
         }
-    }
-
-    private static String buildCacheKey(final String host,
-                                        final Integer port) {
-        return String.format("%s:%d", host, Optional.of(port).orElse(DEFAULT_PORT_KEY_PART));
     }
 }

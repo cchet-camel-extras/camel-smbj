@@ -13,19 +13,18 @@
  See the License for the specific language governing permissions and
  limitations under the License.
  *****************************************************************/
-package at.ihet.camel.extras.cifs;
+package at.ihet.camel.extras.smbj;
 
-import com.hierynomus.smbj.share.DiskEntry;
 import org.apache.camel.component.file.GenericFile;
 
 /**
  * @author Thomas Herzog <herzog.thomas81@gmail.com>
  * @since 10/27/2018
  */
-public class CifsGenericFile extends GenericFile<DiskEntry> {
+public class SmbGenericFile extends GenericFile<SmbFile> {
 
     @Override
     public char getFileSeparator() {
-        return '/';
+        return '\\';
     }
 }

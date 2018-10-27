@@ -20,10 +20,10 @@
         xmlns="http://maven.apache.org/POM/4.0.0">
     <modelVersion>4.0.0</modelVersion>
     <groupId>at.ihet.camel.extras</groupId>
-    <artifactId>camel-cifs</artifactId>
+    <artifactId>camel-smbj</artifactId>
     <version>0.0.1-SNAPSHOT</version>
     <packaging>jar</packaging>
-    <name>camel-cifs</name>
+    <name>camel-smbj</name>
     <description>camel-cifs: A camel extra library which brings in cifs/samba share support</description>
 
     <properties>
@@ -38,12 +38,12 @@
         <!-- Plugin versions -->
         <version.maven-compiler-plugin>3.8.0</version.maven-compiler-plugin>
         <version.maven-surefire-plugin>2.22.1</version.maven-surefire-plugin>
-        <version.maven-enforcer-plugin>3.0.0-M2</version.maven-enforcer-plugin>
+        <version.maven-enforcer-plugin>3.0.0-M2</version.maven-enforcer-plugin> <!-- M2, not in red hat repos -->
         <version.maven-resources-plugin>3.1.0</version.maven-resources-plugin>
         <version.maven-sources-plugin>3.0.1</version.maven-sources-plugin>
 
         <!-- Dependency versions -->
-        <version.camel>2.22.1</version.camel>
+        <version.camel>2.21.0</version.camel>
         <version.smbj>0.9.0</version.smbj>
     </properties>
 

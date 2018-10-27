@@ -13,9 +13,8 @@
  See the License for the specific language governing permissions and
  limitations under the License.
  *****************************************************************/
-package at.ihet.camel.extras.cifs;
+package at.ihet.camel.extras.smbj;
 
-import com.hierynomus.smbj.share.DiskEntry;
 import org.apache.camel.component.file.GenericFileProducer;
 
 import java.util.Objects;
@@ -24,10 +23,10 @@ import java.util.Objects;
  * @author Thomas Herzog <herzog.thomas81@gmail.com>
  * @since 10/26/2018
  */
-public class CifsProducer extends GenericFileProducer<DiskEntry> {
+public class SmbProducer extends GenericFileProducer<SmbFile> {
 
-    public CifsProducer(final CifsEndpoint endpoint,
-                        final CifsFileOperations operations) {
+    public SmbProducer(final SmbEndpoint endpoint,
+                       final SmbFileOperations operations) {
         super(Objects.requireNonNull(endpoint, "Cannot create producer with null endpoint"),
               Objects.requireNonNull(operations, "Cannot create producer with null operations"));
     }

@@ -13,11 +13,11 @@
  See the License for the specific language governing permissions and
  limitations under the License.
  *****************************************************************/
-package at.ihet.camel.extras.cifs;
+package at.ihet.camel.extras.smbj;
 
 
-import at.ihet.camel.extras.cifs.util.ConnectionCache;
 import com.hierynomus.msdtyp.AccessMask;
+import com.hierynomus.msfscc.fileinformation.FileBasicInformation;
 import com.hierynomus.msfscc.fileinformation.FileNamesInformation;
 import com.hierynomus.mssmb2.SMB2CreateDisposition;
 import com.hierynomus.mssmb2.SMB2ShareAccess;
@@ -39,47 +39,76 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.*;
-import java.util.Date;
 import java.util.EnumSet;
 import java.util.List;
 import java.util.Objects;
 import java.util.stream.Collectors;
 
 /**
- * This class is the implementation of the interface {@link GenericFileOperations} for a CIFS share accessed by smbj.
+ * This class is the implementation of the interface {@link GenericFileOperations} for a CIFS/SMB share accessed via smbj.
  *
  * @author Thomas Herzog <herzog.thomas81@gmail.com>
  * @since 10/26/2018
  */
-public class CifsFileOperations implements GenericFileOperations<DiskEntry> {
+public class SmbFileOperations implements GenericFileOperations<SmbFile> {
 
-    private static final Logger LOG = LoggerFactory.getLogger(CifsFileOperations.class);
+    private static final Logger LOG = LoggerFactory.getLogger(SmbFileOperations.class);
     private final SMBClient client;
-    private CifsConfiguration cifsConfiguration;
+    private SmbConfiguration smbConfiguration;
     private String host;
     private Integer port;
-    private GenericFileEndpoint<DiskEntry> endpoint;
+    private GenericFileEndpoint<SmbFile> endpoint;
 
-    public CifsFileOperations(final SMBClient client) {
+    public SmbFileOperations(final SMBClient client) {
         this.client = Objects.requireNonNull(client, "Cannot perform file operations with a null client");
     }
 
+    private static String removeLeadingBackslash(final String name) {
+        if (name.startsWith("\\")) {
+            return name.replaceFirst("\\\\", "");
+        }
+        return name;
+    }
+
+    private static SmbFile mapDiskEntryToSmbFile(final DiskEntry entry) {
+        final FileBasicInformation info = entry.getFileInformation(FileBasicInformation.class);
+        final long fileSize;
+        if (!entry.getFileInformation().getStandardInformation().isDirectory()) {
+            fileSize = 0;
+        } else {
+            fileSize = entry.getFileInformation().getStandardInformation().getEndOfFile();
+        }
+        return new SmbFile(entry.getFileInformation().getStandardInformation().isDirectory(),
+                           SmbFileAttributeUtils.isArchive(info),
+                           SmbFileAttributeUtils.isHidden(info),
+                           SmbFileAttributeUtils.isReadOnly(info),
+                           SmbFileAttributeUtils.isSystem(info),
+                           entry.getFileName(),
+                           fileSize,
+                           entry.getFileInformation().getBasicInformation().getChangeTime().toEpochMillis());
+    }
+
     @Override
-    public void setEndpoint(GenericFileEndpoint<DiskEntry> endpoint) {
+    public void setEndpoint(GenericFileEndpoint<SmbFile> endpoint) {
         this.endpoint = Objects.requireNonNull(endpoint, "Endpoint must not be null");
-        this.cifsConfiguration = Objects.requireNonNull(cifsConfiguration, "Cannot perform file operations with a null cifs configuration");
-        this.host = Objects.requireNonNull(cifsConfiguration.getHost(), "Host ist required for cifs connection");
-        this.port = cifsConfiguration.getPort();
+        this.smbConfiguration = (SmbConfiguration) Objects.requireNonNull(endpoint.getConfiguration(), "Cannot perform file operations with a null smb configuration");
+        this.host = Objects.requireNonNull(smbConfiguration.getHost(), "Host ist required for smb connection");
+        this.port = smbConfiguration.getPort();
     }
 
     @Override
     public boolean deleteFile(String name) throws GenericFileOperationFailedException {
         try {
+            name = removeLeadingBackslash(name);
             try (final DiskShare share = openShare()) {
-                share.rm(name);
-                return true;
+                if (share.fileExists(name)) {
+                    share.rm(name);
+                    return true;
+                }
+                LOG.warn(String.format("Tried to delete file which does not exists '%s'", name));
+                return false;
             }
-        } catch (IOException e) {
+        } catch (Exception e) {
             throw new GenericFileOperationFailedException(String.format("Could not delete file '%s'", name));
         }
     }
@@ -88,9 +117,9 @@ public class CifsFileOperations implements GenericFileOperations<DiskEntry> {
     public boolean existsFile(String name) throws GenericFileOperationFailedException {
         try {
             try (final DiskShare share = openShare()) {
-                return share.fileExists(name);
+                return share.fileExists(removeLeadingBackslash(name));
             }
-        } catch (IOException e) {
+        } catch (Exception e) {
             throw new GenericFileOperationFailedException(String.format("Could not delete file '%s'", name));
         }
     }
@@ -99,15 +128,17 @@ public class CifsFileOperations implements GenericFileOperations<DiskEntry> {
     public boolean renameFile(String from,
                               String to) throws GenericFileOperationFailedException {
         try {
+            from = removeLeadingBackslash(from);
             try (final DiskShare share = openShare()) {
-                getReadOnlyFile(share, from).rename(to);
-                return true;
+                if (share.fileExists(from)) {
+                    getReadOnlyFile(share, from).rename(removeLeadingBackslash(to), true);
+                    return true;
+                }
+                LOG.warn(String.format("Tried to rename file which does not exists '%s'", from));
+                return false;
             }
-        } catch (IOException e) {
+        } catch (Exception e) {
             throw new GenericFileOperationFailedException(String.format("Could not rename file from '%s' to '%s'", from, to), e);
-        } catch (SMBApiException e) {
-            LOG.debug("renameFile failed with exception", e);
-            return false;
         }
     }
 
@@ -115,13 +146,16 @@ public class CifsFileOperations implements GenericFileOperations<DiskEntry> {
     public boolean buildDirectory(String directory,
                                   boolean absolute) throws GenericFileOperationFailedException {
         try {
+            directory = removeLeadingBackslash(directory);
             try (final DiskShare share = openShare()) {
-                share.mkdir(cifsConfiguration.getDirectory() + File.separator + directory);
+                if (!share.folderExists(directory)) {
+                    share.mkdir(directory);
+                }
+                LOG.warn(String.format("Tried to create directory which already not exists '%s'", directory));
                 return true;
             }
         } catch (IOException e) {
-            LOG.debug("buildDirectory failed with exception", e);
-            return false;
+            throw new GenericFileOperationFailedException(String.format("Could not create directory '%s'", directory));
         }
     }
 
@@ -130,15 +164,23 @@ public class CifsFileOperations implements GenericFileOperations<DiskEntry> {
                                 Exchange exchange,
                                 long size) throws GenericFileOperationFailedException {
         try {
+            name = removeLeadingBackslash(name);
             try (final DiskShare share = openShare()) {
-                exchange.getIn().setBody(getReadOnlyFile(share, name).getInputStream());
-                return true;
+                if (share.fileExists(name) || share.folderExists(name)) {
+                    final DiskEntry entry = getReadOnlyFile(share, name);
+                    if (!entry.getFileInformation().getStandardInformation().isDirectory()) {
+                        final com.hierynomus.smbj.share.File file = (com.hierynomus.smbj.share.File) entry;
+                        exchange.getIn().setBody(file.getInputStream());
+                        return true;
+                    } else {
+                        throw new GenericFileOperationFailedException(String.format("Could not retrieve file because it is a directory '%s'", name));
+                    }
+                }
+                LOG.warn(String.format("Tried to retrieve a file which does not exists '%s'", name));
+                return false;
             }
-        } catch (IOException e) {
+        } catch (Exception e) {
             throw new GenericFileOperationFailedException(String.format("Could not retrieve file '%s'", name), e);
-        } catch (SMBApiException e) {
-            LOG.debug("retrieveFile failed with exception", e);
-            return false;
         }
     }
 
@@ -152,6 +194,7 @@ public class CifsFileOperations implements GenericFileOperations<DiskEntry> {
                              Exchange exchange,
                              long size) throws GenericFileOperationFailedException {
         boolean append = false;
+        name = removeLeadingBackslash(name);
 
         if (existsFile(name)) {
             if (endpoint.getFileExist() == GenericFileExist.Ignore) {
@@ -181,53 +224,63 @@ public class CifsFileOperations implements GenericFileOperations<DiskEntry> {
         String storeName = getPath(name);
 
         try {
-            try (BufferedInputStream bis = new BufferedInputStream(exchange.getMessage().getMandatoryBody(InputStream.class))) {
-                try (final DiskShare share = openShare()) {
-                    com.hierynomus.smbj.share.File file = getWritableFile(share, name);
-                    try (final BufferedOutputStream bos = new BufferedOutputStream(file.getOutputStream(append))) {
-                        byte[] data = new byte[512 * 1024];
-                        int dataSize;
-                        while ((dataSize = bis.read(data)) != -1) {
-                            bos.write(data, 0, dataSize);
+            try (final DiskShare share = openShare()) {
+                final DiskEntry entry = getWritableFile(share, name);
+                if (!entry.getFileInformation().getStandardInformation().isDirectory()) {
+                    final com.hierynomus.smbj.share.File file = (com.hierynomus.smbj.share.File) entry;
+                    try (BufferedInputStream bis = new BufferedInputStream(exchange.getMessage().getMandatoryBody(InputStream.class))) {
+                        try (final BufferedOutputStream bos = new BufferedOutputStream(file.getOutputStream(append))) {
+                            byte[] data = new byte[512 * 1024];
+                            int dataSize;
+                            while ((dataSize = bis.read(data)) != -1) {
+                                bos.write(data, 0, dataSize);
+                            }
+                            bos.flush();
+                            file.rename(storeName);
+                            return true;
                         }
-                        bos.flush();
-                        file.rename(storeName);
-                        return true;
                     }
+                } else {
+                    throw new GenericFileOperationFailedException(String.format("Could not store file, because it is a directory '%s'", name));
                 }
             }
         } catch (IOException | InvalidPayloadException e) {
-            throw new GenericFileOperationFailedException(String.format("Could not retrieve file '%s'", name), e);
+            throw new GenericFileOperationFailedException(String.format("Could not store file '%s'", name), e);
         } catch (SMBApiException e) {
-            LOG.debug("retrieveFile failed with exception", e);
+            LOG.debug("storeFile failed with exception", e);
             return false;
         }
     }
 
     @Override
     public String getCurrentDirectory() throws GenericFileOperationFailedException {
-        throw new UnsupportedOperationException("Cannot get current directory on a cifs share");
+        throw new UnsupportedOperationException("Cannot get current directory on a smb share");
     }
 
     @Override
     public void changeCurrentDirectory(String path) throws GenericFileOperationFailedException {
-        throw new UnsupportedOperationException("Cannot switch to a directory on a cifs share");
+        throw new UnsupportedOperationException("Cannot switch to a directory on a smb share");
     }
 
     @Override
     public void changeToParentDirectory() throws GenericFileOperationFailedException {
-        throw new UnsupportedOperationException("Cannot switch to a directory on a cifs share");
+        throw new UnsupportedOperationException("Cannot switch to a directory on a smb share");
     }
 
     @Override
-    public List<DiskEntry> listFiles() throws GenericFileOperationFailedException {
+    public List<SmbFile> listFiles() throws GenericFileOperationFailedException {
         return listFiles("");
     }
 
     @Override
-    public List<DiskEntry> listFiles(String path) throws GenericFileOperationFailedException {
+    public List<SmbFile> listFiles(String path) throws GenericFileOperationFailedException {
         try (final DiskShare share = openShare()) {
-            return share.list(path, FileNamesInformation.class).stream().map(info -> getReadOnlyFile(share, info.getFileName()))
+            return share.list(path, FileNamesInformation.class).stream()
+                        // Exclude linux specific directories
+                        .filter(entry -> !entry.getFileName().equals("."))
+                        .filter(entry -> !entry.getFileName().equals(".."))
+                        .map(info -> getReadOnlyFile(share, info.getFileName()))
+                        .map(SmbFileOperations::mapDiskEntryToSmbFile)
                         .collect(Collectors.toList());
         } catch (Exception e) {
             throw new GenericFileOperationFailedException(String.format("Could not list files for path: '%s'", path), e);
@@ -235,38 +288,38 @@ public class CifsFileOperations implements GenericFileOperations<DiskEntry> {
     }
 
     private Connection getConnection() {
-        return ConnectionCache.getOrCreateConnection(client, host, port);
+        return ConnectionCache.getConnectionAndCreateIfNecessary(client, endpoint.getId(), host, port);
     }
 
     private Session getSession() {
-        if (cifsConfiguration.isNtlmAuthentication()) {
-            return getConnection().authenticate(cifsConfiguration.createAuthenticationContext());
+        if (smbConfiguration.isNtlmAuthentication()) {
+            return getConnection().authenticate(smbConfiguration.createAuthenticationContext());
         }
         throw new IllegalStateException("For now only NTLM authentication is supported");
     }
 
     public DiskShare openShare() {
-        return (DiskShare) getSession().connectShare(cifsConfiguration.getDirectory());
+        return (DiskShare) getSession().connectShare(smbConfiguration.getShare());
     }
 
-    private com.hierynomus.smbj.share.File getReadOnlyFile(final DiskShare share,
-                                                           final String name) {
-        return share.openFile(name,
-                              EnumSet.of(AccessMask.GENERIC_READ),
-                              null,
-                              EnumSet.of(SMB2ShareAccess.FILE_SHARE_READ),
-                              SMB2CreateDisposition.FILE_OPEN,
-                              null);
+    private DiskEntry getReadOnlyFile(final DiskShare share,
+                                      final String name) {
+        return share.open(name,
+                          EnumSet.of(AccessMask.GENERIC_READ),
+                          null,
+                          EnumSet.of(SMB2ShareAccess.FILE_SHARE_READ),
+                          SMB2CreateDisposition.FILE_OPEN,
+                          null);
     }
 
-    private com.hierynomus.smbj.share.File getWritableFile(final DiskShare share,
-                                                           final String name) {
-        return share.openFile(name,
-                              EnumSet.of(AccessMask.FILE_WRITE_DATA),
-                              null,
-                              EnumSet.of(SMB2ShareAccess.FILE_SHARE_WRITE),
-                              SMB2CreateDisposition.FILE_CREATE,
-                              null);
+    private DiskEntry getWritableFile(final DiskShare share,
+                                      final String name) {
+        return share.open(name,
+                          EnumSet.of(AccessMask.FILE_WRITE_DATA),
+                          null,
+                          EnumSet.of(SMB2ShareAccess.FILE_SHARE_WRITE),
+                          SMB2CreateDisposition.FILE_SUPERSEDE,
+                          null);
     }
 
     /**
@@ -321,22 +374,11 @@ public class CifsFileOperations implements GenericFileOperations<DiskEntry> {
     }
 
     private String getPath(String pathEnd) {
-        String path = cifsConfiguration.getHost() + pathEnd;
+        String path = smbConfiguration.getHost() + pathEnd;
         return path.replace('\\', '/');
     }
 
-    private Long lastModifiedDate(Exchange exchange) {
-        Long last = null;
-        if (endpoint.isKeepLastModified()) {
-            Date date = exchange.getIn().getHeader(Exchange.FILE_LAST_MODIFIED, Date.class);
-            if (date != null) {
-                last = date.getTime();
-            } else {
-                // fallback and try a long
-                last = exchange.getIn().getHeader(Exchange.FILE_LAST_MODIFIED, Long.class);
-            }
-        }
-        return last;
+    public SMBClient getClient() {
+        return client;
     }
-
 }

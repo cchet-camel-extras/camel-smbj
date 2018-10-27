@@ -1,0 +1,2 @@
+class=at.ihet.camel.extras.smbj.SmbComponent
+strategy.factory.class=at.ihet.camel.extras.smbj.SmbProcessStrategyFactory

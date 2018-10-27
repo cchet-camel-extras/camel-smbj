@@ -13,10 +13,9 @@
  See the License for the specific language governing permissions and
  limitations under the License.
  *****************************************************************/
-package at.ihet.camel.extras.cifs;
+package at.ihet.camel.extras.smbj;
 
 import com.hierynomus.smbj.SMBClient;
-import com.hierynomus.smbj.share.DiskEntry;
 import org.apache.camel.Exchange;
 import org.apache.camel.Processor;
 import org.apache.camel.component.file.GenericFile;
@@ -31,12 +30,12 @@ import java.io.File;
  * @author Thomas Herzog <herzog.thomas81@gmail.com>
  * @since 10/26/2018
  */
-@UriEndpoint(scheme = "cifs", title = "CIFS", syntax = "cifs://server[:port]/share[?options]", consumerClass = CifsConsumer.class)
-public class CifsEndpoint extends GenericFileEndpoint<DiskEntry> {
+@UriEndpoint(scheme = "smb", title = "SMB", syntax = "smb://server[:port]/share[?options]", consumerClass = SmbConsumer.class)
+public class SmbEndpoint extends GenericFileEndpoint<SmbFile> {
 
-    public CifsEndpoint(final String endpointUri,
-                        final CifsComponent component,
-                        final CifsConfiguration configuration) {
+    public SmbEndpoint(final String endpointUri,
+                       final SmbComponent component,
+                       final SmbConfiguration configuration) {
         super(endpointUri, component);
         if (configuration != null) {
             this.configuration = configuration;
@@ -44,7 +43,7 @@ public class CifsEndpoint extends GenericFileEndpoint<DiskEntry> {
     }
 
     @Override
-    public CifsConsumer createConsumer(Processor processor) throws Exception {
+    public SmbConsumer createConsumer(Processor processor) throws Exception {
         // Cannot delete and move at the same time
         if (isDelete() && getMove() != null) {
             throw new IllegalArgumentException("You cannot set both delete=true and move options");
@@ -62,13 +61,12 @@ public class CifsEndpoint extends GenericFileEndpoint<DiskEntry> {
             idempotentRepository = MemoryIdempotentRepository.memoryIdempotentRepository(DEFAULT_IDEMPOTENT_CACHE_SIZE);
         }
 
-        final CifsConfiguration configuration = getConfiguration();
-        final CifsFileOperations fileOperations = new CifsFileOperations(new SMBClient(configuration.getSmbConfig()));
+        final SmbConfiguration configuration = getConfiguration();
+        final SmbFileOperations fileOperations = new SmbFileOperations(new SMBClient(configuration.getSmbConfig()));
         fileOperations.setEndpoint(this);
-        CifsConsumer consumer = new CifsConsumer(this,
-                                                 processor,
-                                                 fileOperations,
-                                                 processStrategy != null ? processStrategy : createGenericFileStrategy());
+        SmbConsumer consumer = new SmbConsumer(this,
+                                               processor,
+                                               fileOperations);
         consumer.setMaxMessagesPerPoll(getMaxMessagesPerPoll());
         consumer.setEagerLimitMaxMessagesPerPoll(isEagerMaxMessagesPerPoll());
         configureConsumer(consumer);
@@ -77,16 +75,16 @@ public class CifsEndpoint extends GenericFileEndpoint<DiskEntry> {
     }
 
     @Override
-    public CifsProducer createProducer() {
-        final CifsConfiguration configuration = getConfiguration();
-        final CifsFileOperations fileOperations = new CifsFileOperations(new SMBClient(configuration.getSmbConfig()));
+    public SmbProducer createProducer() {
+        final SmbConfiguration configuration = getConfiguration();
+        final SmbFileOperations fileOperations = new SmbFileOperations(new SMBClient(configuration.getSmbConfig()));
         fileOperations.setEndpoint(this);
 
-        return new CifsProducer(this, fileOperations);
+        return new SmbProducer(this, fileOperations);
     }
 
     @Override
-    public Exchange createExchange(GenericFile<DiskEntry> file) {
+    public Exchange createExchange(GenericFile<SmbFile> file) {
         Exchange answer = new DefaultExchange(this);
         if (file != null) {
             file.bindToExchange(answer);
@@ -96,7 +94,7 @@ public class CifsEndpoint extends GenericFileEndpoint<DiskEntry> {
 
     @Override
     public String getScheme() {
-        return "cifs";
+        return "smb";
     }
 
     @Override
@@ -109,7 +107,7 @@ public class CifsEndpoint extends GenericFileEndpoint<DiskEntry> {
         return false;
     }
 
-    public CifsConfiguration getConfiguration() {
-        return (CifsConfiguration) configuration;
+    public SmbConfiguration getConfiguration() {
+        return (SmbConfiguration) configuration;
     }
 }
