@@ -20,7 +20,6 @@ import com.hierynomus.smbj.SmbConfig;
 import com.hierynomus.smbj.auth.AuthenticationContext;
 import org.apache.camel.component.file.GenericFileConfiguration;
 import org.apache.camel.spi.UriParam;
-import org.apache.camel.util.ObjectHelper;
 
 import java.net.URI;
 import java.util.Objects;
@@ -35,9 +34,8 @@ import java.util.concurrent.TimeUnit;
  */
 public class SmbConfiguration extends GenericFileConfiguration {
 
-    private static final String DOMAIN_SEPARATOR = ";";
-    private static final String USER_PASS_SEPARATOR = ":";
-    private SmbConfig.Builder builder;
+    private final SmbConfig.Builder builder;
+    private final URI uri;
     private String domain;
     private String host;
     private Integer port;
@@ -80,23 +78,24 @@ public class SmbConfiguration extends GenericFileConfiguration {
     private Integer transactTimeout = 60000;
 
     public SmbConfiguration(final URI uri) {
-        configure(Objects.requireNonNull(uri, "Cannot determine host, port and share for null directory"));
+        this.uri = Objects.requireNonNull(uri, "Cannot determine host, port and share for null directory");
         this.builder = SmbConfig.builder();
+        configure(uri);
         setDirectory("");
     }
 
     public SmbConfig getSmbConfig() {
-        builder = builder.withDialects(resolveSmbDialect())
-                         .withDfsEnabled(dfs)
-                         .withMultiProtocolNegotiate(multiProtocol)
-                         .withRandomProvider(new Random(System.currentTimeMillis()))
-                         .withSigningRequired(signing)
-                         .withReadBufferSize(Optional.ofNullable(readBufferSize).orElse(bufferSize))
-                         .withWriteBufferSize(Optional.ofNullable(writeBufferSize).orElse(bufferSize))
-                         .withReadTimeout(Optional.ofNullable(readTimeout).orElse(timeout), TimeUnit.MILLISECONDS)
-                         .withWriteTimeout(Optional.ofNullable(writeTimeout).orElse(timeout), TimeUnit.MILLISECONDS)
-                         .withTransactTimeout(transactTimeout, TimeUnit.MILLISECONDS)
-                         .withSoTimeout(socketTimeout);
+        builder.withDialects(resolveSmbDialect())
+               .withDfsEnabled(dfs)
+               .withMultiProtocolNegotiate(multiProtocol)
+               .withRandomProvider(new Random(System.currentTimeMillis()))
+               .withSigningRequired(signing)
+               .withReadBufferSize(Optional.ofNullable(readBufferSize).orElse(bufferSize))
+               .withWriteBufferSize(Optional.ofNullable(writeBufferSize).orElse(bufferSize))
+               .withReadTimeout(Optional.ofNullable(readTimeout).orElse(timeout), TimeUnit.MILLISECONDS)
+               .withWriteTimeout(Optional.ofNullable(writeTimeout).orElse(timeout), TimeUnit.MILLISECONDS)
+               .withTransactTimeout(transactTimeout, TimeUnit.MILLISECONDS)
+               .withSoTimeout(socketTimeout);
 
         if (uuid != null) {
             builder.withClientGuid(UUID.fromString(uuid));
@@ -125,7 +124,7 @@ public class SmbConfiguration extends GenericFileConfiguration {
         } else {
             setPort(uri.getPort());
         }
-        if(uri.getPath().chars().filter(c -> c == '\\').count() > 1) {
+        if (uri.getPath().chars().filter(c -> c == '\\').count() > 1) {
             throw new IllegalArgumentException("URI path cannot contain '\\' characters");
         }
         setShare(uri.getPath().replace("\\", "").replace("/", ""));
@@ -139,6 +138,14 @@ public class SmbConfiguration extends GenericFileConfiguration {
     }
 
     //region Getter and Setter
+    public URI getUri() {
+        return uri;
+    }
+
+    public String getUriWithoutProtocol() {
+        return uri.toString().replace("smb:", "").replace("/", "\\");
+    }
+
     public String getDomain() {
         return domain;
     }

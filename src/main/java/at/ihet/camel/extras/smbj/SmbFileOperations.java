@@ -18,7 +18,6 @@ package at.ihet.camel.extras.smbj;
 
 import com.hierynomus.msdtyp.AccessMask;
 import com.hierynomus.msfscc.fileinformation.FileBasicInformation;
-import com.hierynomus.msfscc.fileinformation.FileNamesInformation;
 import com.hierynomus.mssmb2.SMB2CreateDisposition;
 import com.hierynomus.mssmb2.SMB2ShareAccess;
 import com.hierynomus.mssmb2.SMBApiException;
@@ -70,7 +69,7 @@ public class SmbFileOperations implements GenericFileOperations<SmbFile> {
         return name;
     }
 
-    private static SmbFile mapDiskEntryToSmbFile(final DiskEntry entry) {
+    private SmbFile mapDiskEntryToSmbFile(final DiskEntry entry) {
         final FileBasicInformation info = entry.getFileInformation(FileBasicInformation.class);
         final long fileSize;
         if (!entry.getFileInformation().getStandardInformation().isDirectory()) {
@@ -83,7 +82,7 @@ public class SmbFileOperations implements GenericFileOperations<SmbFile> {
                            SmbFileAttributeUtils.isHidden(info),
                            SmbFileAttributeUtils.isReadOnly(info),
                            SmbFileAttributeUtils.isSystem(info),
-                           entry.getFileName(),
+                           removeLeadingBackslash(entry.getFileName().replace(smbConfiguration.getUriWithoutProtocol(), "")),
                            fileSize,
                            entry.getFileInformation().getBasicInformation().getChangeTime().toEpochMillis());
     }
@@ -98,15 +97,17 @@ public class SmbFileOperations implements GenericFileOperations<SmbFile> {
 
     @Override
     public boolean deleteFile(String name) throws GenericFileOperationFailedException {
-        try {
-            name = removeLeadingBackslash(name);
-            try (final DiskShare share = openShare()) {
-                if (share.fileExists(name)) {
-                    share.rm(name);
-                    return true;
+        name = removeLeadingBackslash(name);
+        try (final Connection connection = getConnection()) {
+            try (final Session session = getSession(connection)) {
+                try (final DiskShare share = openShare(session)) {
+                    if (share.fileExists(name)) {
+                        share.rm(name);
+                        return true;
+                    }
+                    LOG.warn(String.format("Tried to delete file which does not exists '%s'", name));
+                    return false;
                 }
-                LOG.warn(String.format("Tried to delete file which does not exists '%s'", name));
-                return false;
             }
         } catch (Exception e) {
             throw new GenericFileOperationFailedException(String.format("Could not delete file '%s'", name));
@@ -115,9 +116,11 @@ public class SmbFileOperations implements GenericFileOperations<SmbFile> {
 
     @Override
     public boolean existsFile(String name) throws GenericFileOperationFailedException {
-        try {
-            try (final DiskShare share = openShare()) {
-                return share.fileExists(removeLeadingBackslash(name));
+        try (final Connection connection = getConnection()) {
+            try (final Session session = getSession(connection)) {
+                try (final DiskShare share = openShare(session)) {
+                    return share.fileExists(removeLeadingBackslash(name));
+                }
             }
         } catch (Exception e) {
             throw new GenericFileOperationFailedException(String.format("Could not delete file '%s'", name));
@@ -127,15 +130,17 @@ public class SmbFileOperations implements GenericFileOperations<SmbFile> {
     @Override
     public boolean renameFile(String from,
                               String to) throws GenericFileOperationFailedException {
-        try {
-            from = removeLeadingBackslash(from);
-            try (final DiskShare share = openShare()) {
-                if (share.fileExists(from)) {
-                    getWritableFile(share, from).rename(removeLeadingBackslash(to), true);
-                    return true;
+        from = removeLeadingBackslash(from);
+        try (final Connection connection = getConnection()) {
+            try (final Session session = getSession(connection)) {
+                try (final DiskShare share = openShare(session)) {
+                    if (share.fileExists(from)) {
+                        getWritableFile(share, from).rename(removeLeadingBackslash(to), true);
+                        return true;
+                    }
+                    LOG.warn(String.format("Tried to rename file which does not exists '%s'", from));
+                    return false;
                 }
-                LOG.warn(String.format("Tried to rename file which does not exists '%s'", from));
-                return false;
             }
         } catch (Exception e) {
             throw new GenericFileOperationFailedException(String.format("Could not rename file from '%s' to '%s'", from, to), e);
@@ -145,16 +150,18 @@ public class SmbFileOperations implements GenericFileOperations<SmbFile> {
     @Override
     public boolean buildDirectory(String directory,
                                   boolean absolute) throws GenericFileOperationFailedException {
-        try {
-            directory = removeLeadingBackslash(directory);
-            try (final DiskShare share = openShare()) {
-                if (!share.folderExists(directory)) {
-                    share.mkdir(directory);
+        directory = removeLeadingBackslash(directory);
+        try (final Connection connection = getConnection()) {
+            try (final Session session = getSession(connection)) {
+                try (final DiskShare share = openShare(session)) {
+                    if (!share.folderExists(directory)) {
+                        share.mkdir(directory);
+                    }
+                    LOG.warn(String.format("Tried to create directory which already not exists '%s'", directory));
+                    return true;
                 }
-                LOG.warn(String.format("Tried to create directory which already not exists '%s'", directory));
-                return true;
             }
-        } catch (IOException e) {
+        } catch (Exception e) {
             throw new GenericFileOperationFailedException(String.format("Could not create directory '%s'", directory));
         }
     }
@@ -163,17 +170,19 @@ public class SmbFileOperations implements GenericFileOperations<SmbFile> {
     public boolean retrieveFile(String name,
                                 Exchange exchange,
                                 long size) throws GenericFileOperationFailedException {
-        try {
-            name = removeLeadingBackslash(name);
-            try (final DiskShare share = openShare()) {
-                if (share.fileExists(name)) {
-                    final DiskEntry entry = getReadOnlyFile(share, name);
-                    final com.hierynomus.smbj.share.File file = (com.hierynomus.smbj.share.File) entry;
-                    exchange.getIn().setBody(file.getInputStream());
-                    return true;
+        name = removeLeadingBackslash(name);
+        try (final Connection connection = getConnection()) {
+            try (final Session session = getSession(connection)) {
+                try (final DiskShare share = openShare(session)) {
+                    if (share.fileExists(name)) {
+                        final DiskEntry entry = getReadOnlyFile(share, name);
+                        final com.hierynomus.smbj.share.File file = (com.hierynomus.smbj.share.File) entry;
+                        exchange.getIn().setBody(file.getInputStream());
+                        return true;
+                    }
+                    LOG.warn(String.format("Tried to retrieve a file which does not exists '%s'", name));
+                    return false;
                 }
-                LOG.warn(String.format("Tried to retrieve a file which does not exists '%s'", name));
-                return false;
             }
         } catch (Exception e) {
             throw new GenericFileOperationFailedException(String.format("Could not retrieve file '%s'", name), e);
@@ -219,25 +228,27 @@ public class SmbFileOperations implements GenericFileOperations<SmbFile> {
 
         String storeName = getPath(name);
 
-        try {
-            try (final DiskShare share = openShare()) {
-                final DiskEntry entry = getWritableFile(share, name);
-                if (!entry.getFileInformation().getStandardInformation().isDirectory()) {
-                    final com.hierynomus.smbj.share.File file = (com.hierynomus.smbj.share.File) entry;
-                    try (BufferedInputStream bis = new BufferedInputStream(exchange.getMessage().getMandatoryBody(InputStream.class))) {
-                        try (final BufferedOutputStream bos = new BufferedOutputStream(file.getOutputStream(append))) {
-                            byte[] data = new byte[512 * 1024];
-                            int dataSize;
-                            while ((dataSize = bis.read(data)) != -1) {
-                                bos.write(data, 0, dataSize);
+        try (final Connection connection = getConnection()) {
+            try (final Session session = getSession(connection)) {
+                try (final DiskShare share = openShare(session)) {
+                    final DiskEntry entry = getWritableFile(share, name);
+                    if (!entry.getFileInformation().getStandardInformation().isDirectory()) {
+                        final com.hierynomus.smbj.share.File file = (com.hierynomus.smbj.share.File) entry;
+                        try (BufferedInputStream bis = new BufferedInputStream(exchange.getMessage().getMandatoryBody(InputStream.class))) {
+                            try (final BufferedOutputStream bos = new BufferedOutputStream(file.getOutputStream(append))) {
+                                byte[] data = new byte[512 * 1024];
+                                int dataSize;
+                                while ((dataSize = bis.read(data)) != -1) {
+                                    bos.write(data, 0, dataSize);
+                                }
+                                bos.flush();
+                                file.rename(storeName);
+                                return true;
                             }
-                            bos.flush();
-                            file.rename(storeName);
-                            return true;
                         }
+                    } else {
+                        throw new GenericFileOperationFailedException(String.format("Could not store file, because it is a directory '%s'", name));
                     }
-                } else {
-                    throw new GenericFileOperationFailedException(String.format("Could not store file, because it is a directory '%s'", name));
                 }
             }
         } catch (IOException | InvalidPayloadException e) {
@@ -270,42 +281,51 @@ public class SmbFileOperations implements GenericFileOperations<SmbFile> {
 
     @Override
     public List<SmbFile> listFiles(String path) throws GenericFileOperationFailedException {
-        try (final DiskShare share = openShare()) {
-            return share.list(path, FileNamesInformation.class).stream()
-                        // Exclude linux specific directories
-                        .filter(entry -> !entry.getFileName().equals("."))
-                        .filter(entry -> !entry.getFileName().equals(".."))
-                        .map(info -> getReadOnlyFileOrDirectory(share, info.getFileName()))
-                        .map(SmbFileOperations::mapDiskEntryToSmbFile)
-                        .collect(Collectors.toList());
+        try (final Connection connection = getConnection()) {
+            try (final Session session = getSession(connection)) {
+                try (final DiskShare share = openShare(session)) {
+                    final String pathPrefix = path.isEmpty() ? path : path + "\\";
+                    return share.list(path).stream()
+                                // Exclude Linux . and .. directories
+                                .filter(entry -> !entry.getFileName().equals("."))
+                                .filter(entry -> !entry.getFileName().equals(".."))
+                                .map(info -> getReadOnlyFileOrDirectory(share, pathPrefix + info.getFileName()))
+                                .map(this::mapDiskEntryToSmbFile)
+                                .collect(Collectors.toList());
+                }
+            }
         } catch (Exception e) {
             throw new GenericFileOperationFailedException(String.format("Could not list files for path: '%s'", path), e);
         }
     }
 
     private Connection getConnection() {
-        return ConnectionCache.getConnectionAndCreateIfNecessary(client, endpoint.getId(), host, port);
+        try {
+            return client.connect(host); //ConnectionCache.getConnectionAndCreateIfNecessary(client, endpoint.getId(), host, port);
+        } catch (IOException e) {
+            throw new GenericFileOperationFailedException("Could not create connection", e);
+        }
     }
 
-    private Session getSession() {
+    private Session getSession(final Connection connection) {
         if (smbConfiguration.isNtlmAuthentication()) {
-            return getConnection().authenticate(smbConfiguration.createAuthenticationContext());
+            return connection.authenticate(smbConfiguration.createAuthenticationContext());
         }
         throw new IllegalStateException("For now only NTLM authentication is supported");
     }
 
-    public DiskShare openShare() {
-        return (DiskShare) getSession().connectShare(smbConfiguration.getShare());
+    public DiskShare openShare(final Session session) {
+        return (DiskShare) session.connectShare(smbConfiguration.getShare());
     }
 
     private DiskEntry getReadOnlyFile(final DiskShare share,
                                       final String name) {
         return share.openFile(name,
-                          EnumSet.of(AccessMask.GENERIC_READ),
-                          null,
-                          EnumSet.of(SMB2ShareAccess.FILE_SHARE_READ),
-                          SMB2CreateDisposition.FILE_OPEN,
-                          null);
+                              EnumSet.of(AccessMask.GENERIC_READ),
+                              null,
+                              EnumSet.of(SMB2ShareAccess.FILE_SHARE_READ),
+                              SMB2CreateDisposition.FILE_OPEN,
+                              null);
     }
 
     private DiskEntry getReadOnlyFileOrDirectory(final DiskShare share,
