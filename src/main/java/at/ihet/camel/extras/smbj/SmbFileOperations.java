@@ -131,7 +131,7 @@ public class SmbFileOperations implements GenericFileOperations<SmbFile> {
             from = removeLeadingBackslash(from);
             try (final DiskShare share = openShare()) {
                 if (share.fileExists(from)) {
-                    getReadOnlyFile(share, from).rename(removeLeadingBackslash(to), true);
+                    getWritableFile(share, from).rename(removeLeadingBackslash(to), true);
                     return true;
                 }
                 LOG.warn(String.format("Tried to rename file which does not exists '%s'", from));
@@ -166,15 +166,11 @@ public class SmbFileOperations implements GenericFileOperations<SmbFile> {
         try {
             name = removeLeadingBackslash(name);
             try (final DiskShare share = openShare()) {
-                if (share.fileExists(name) || share.folderExists(name)) {
+                if (share.fileExists(name)) {
                     final DiskEntry entry = getReadOnlyFile(share, name);
-                    if (!entry.getFileInformation().getStandardInformation().isDirectory()) {
-                        final com.hierynomus.smbj.share.File file = (com.hierynomus.smbj.share.File) entry;
-                        exchange.getIn().setBody(file.getInputStream());
-                        return true;
-                    } else {
-                        throw new GenericFileOperationFailedException(String.format("Could not retrieve file because it is a directory '%s'", name));
-                    }
+                    final com.hierynomus.smbj.share.File file = (com.hierynomus.smbj.share.File) entry;
+                    exchange.getIn().setBody(file.getInputStream());
+                    return true;
                 }
                 LOG.warn(String.format("Tried to retrieve a file which does not exists '%s'", name));
                 return false;
@@ -279,7 +275,7 @@ public class SmbFileOperations implements GenericFileOperations<SmbFile> {
                         // Exclude linux specific directories
                         .filter(entry -> !entry.getFileName().equals("."))
                         .filter(entry -> !entry.getFileName().equals(".."))
-                        .map(info -> getReadOnlyFile(share, info.getFileName()))
+                        .map(info -> getReadOnlyFileOrDirectory(share, info.getFileName()))
                         .map(SmbFileOperations::mapDiskEntryToSmbFile)
                         .collect(Collectors.toList());
         } catch (Exception e) {
@@ -304,6 +300,16 @@ public class SmbFileOperations implements GenericFileOperations<SmbFile> {
 
     private DiskEntry getReadOnlyFile(final DiskShare share,
                                       final String name) {
+        return share.openFile(name,
+                          EnumSet.of(AccessMask.GENERIC_READ),
+                          null,
+                          EnumSet.of(SMB2ShareAccess.FILE_SHARE_READ),
+                          SMB2CreateDisposition.FILE_OPEN,
+                          null);
+    }
+
+    private DiskEntry getReadOnlyFileOrDirectory(final DiskShare share,
+                                                 final String name) {
         return share.open(name,
                           EnumSet.of(AccessMask.GENERIC_READ),
                           null,
@@ -314,12 +320,12 @@ public class SmbFileOperations implements GenericFileOperations<SmbFile> {
 
     private DiskEntry getWritableFile(final DiskShare share,
                                       final String name) {
-        return share.open(name,
-                          EnumSet.of(AccessMask.FILE_WRITE_DATA),
-                          null,
-                          EnumSet.of(SMB2ShareAccess.FILE_SHARE_WRITE),
-                          SMB2CreateDisposition.FILE_SUPERSEDE,
-                          null);
+        return share.openFile(name,
+                              EnumSet.of(AccessMask.GENERIC_ALL),
+                              null,
+                              EnumSet.of(SMB2ShareAccess.FILE_SHARE_WRITE),
+                              SMB2CreateDisposition.FILE_SUPERSEDE,
+                              null);
     }
 
     /**

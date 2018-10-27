@@ -119,26 +119,14 @@ public class SmbConfiguration extends GenericFileConfiguration {
 
     @Override
     public void configure(URI uri) {
-        String userInfo = uri.getUserInfo();
-
-        if (userInfo != null) {
-            if (userInfo.contains(DOMAIN_SEPARATOR)) {
-                setDomain(ObjectHelper.before(userInfo, DOMAIN_SEPARATOR));
-                userInfo = ObjectHelper.after(userInfo, DOMAIN_SEPARATOR);
-            }
-            if (userInfo.contains(USER_PASS_SEPARATOR)) {
-                setUsername(ObjectHelper.before(userInfo, USER_PASS_SEPARATOR));
-                setPassword(ObjectHelper.after(userInfo, USER_PASS_SEPARATOR));
-            } else {
-                setUsername(userInfo);
-            }
-        }
-
         setHost(uri.getHost());
         if (uri.getPort() <= 0) {
             setPort(null);
         } else {
             setPort(uri.getPort());
+        }
+        if(uri.getPath().chars().filter(c -> c == '\\').count() > 1) {
+            throw new IllegalArgumentException("URI path cannot contain '\\' characters");
         }
         setShare(uri.getPath().replace("\\", "").replace("/", ""));
     }
