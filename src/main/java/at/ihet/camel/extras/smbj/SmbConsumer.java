@@ -22,7 +22,6 @@ import org.apache.camel.component.file.GenericFileConsumer;
 import org.apache.camel.component.file.GenericFileOperations;
 import org.apache.camel.util.FileUtil;
 
-import java.util.Comparator;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
@@ -34,6 +33,7 @@ import java.util.Optional;
 public class SmbConsumer extends GenericFileConsumer<SmbFile> {
 
     private final SmbConfiguration configuration;
+    private boolean connectionOpened = false;
 
     public SmbConsumer(SmbEndpoint endpoint,
                        Processor processor,
@@ -45,17 +45,9 @@ public class SmbConsumer extends GenericFileConsumer<SmbFile> {
     }
 
     @Override
-    protected void doStart() throws Exception {
-        super.doStart();
-
-        log.trace(String.format("Initializing connection for endpoint with id : '%s' because pooling started", endpoint.getId()));
-        final SmbFileOperations operations = (SmbFileOperations) this.operations;
-        ConnectionCache.getConnectionAndCreateIfNecessary(operations.getClient(), endpoint.getId(), configuration.getHost(), configuration.getPort());
-    }
-
-    @Override
     protected void doStop() throws Exception {
-        log.trace(String.format("Releasing connection for endpoint with id : '%s' because pooling stopped", endpoint.getId()));
+        connectionOpened = false;
+        log.trace(String.format("dReleasing connection for endpoint with id : '%s' because pooling stopped", endpoint.getId()));
         ConnectionCache.releaseConnection(endpoint.getId());
 
         super.doStop();
@@ -63,6 +55,7 @@ public class SmbConsumer extends GenericFileConsumer<SmbFile> {
 
     @Override
     protected void doSuspend() throws Exception {
+        connectionOpened = false;
         log.trace(String.format("Releasing connection for endpoint with id : '%s' because pooling suspends", endpoint.getId()));
         ConnectionCache.releaseConnection(endpoint.getId());
 
@@ -73,18 +66,27 @@ public class SmbConsumer extends GenericFileConsumer<SmbFile> {
     protected boolean pollDirectory(String fileName,
                                     List<GenericFile<SmbFile>> fileList,
                                     int depth) {
-        log.trace(String.format("pollDirectory() running. My delay is [%s] and my strategy is [%s]", this.getDelay(), this.getPollStrategy().getClass().toString()));
-        log.trace(String.format("pollDirectory() fileName[%s]", fileName));
+        log.trace(String.format("Pooling directory with delay '%s' and strategy '%s'", this.getDelay(), this.getPollStrategy().getClass().toString()));
+        log.trace(String.format("fileName[%s]", fileName));
+
+        // Open connection on start pooling
+        if (!connectionOpened) {
+            createConnection();
+        }
 
         final List<SmbFile> smbFiles = operations.listFiles(fileName);
-        // sort if intended
-        if (configuration.getSort()) {
-            operations.listFiles(fileName).sort(Comparator.comparing(SmbFile::getFileNameFull));
+
+        // Release connection if no files where found, because pooling stops here
+        if (!smbFiles.isEmpty()) {
+            releaseConnection();
+            return true;
         }
 
         // Walk found files
         for (final SmbFile file : smbFiles) {
+            // Release connection if we hit the limit, because pooling stops here
             if (!canPollMoreFiles(fileList)) {
+                releaseConnection();
                 return false;
             }
 
@@ -100,6 +102,7 @@ public class SmbConsumer extends GenericFileConsumer<SmbFile> {
                 }
             }
         }
+
         return true;
     }
 
@@ -107,6 +110,19 @@ public class SmbConsumer extends GenericFileConsumer<SmbFile> {
     protected void updateFileHeaders(GenericFile<SmbFile> file,
                                      Message message) {
         // TODO: What we need to do form smb file?
+    }
+
+    private void createConnection() {
+        log.trace(String.format("Initializing connection for endpoint with id : '%s' because pooling started", endpoint.getId()));
+        final SmbFileOperations operations = (SmbFileOperations) this.operations;
+        ConnectionCache.getConnectionAndCreateIfNecessary(operations.getClient(), endpoint.getId(), configuration.getHost(), configuration.getPort());
+        connectionOpened = true;
+    }
+
+    private void releaseConnection() {
+        connectionOpened = false;
+        log.trace(String.format("Releasing connection for endpoint with id : '%s' because pooling suspends", endpoint.getId()));
+        ConnectionCache.releaseConnection(endpoint.getId());
     }
 
     private GenericFile<SmbFile> asGenericFile(String path,
@@ -123,7 +139,6 @@ public class SmbConsumer extends GenericFileConsumer<SmbFile> {
         answer.setAbsolute(true);
         answer.setAbsoluteFilePath(file.getFileName());
 
-        log.trace("asGenericFile():");
         log.trace(String.format("absoluteFilePath[%s] filenameonly[%s] filename[%s] relativepath[%s]",
                                 answer.getAbsoluteFilePath(),
                                 answer.getFileNameOnly(),

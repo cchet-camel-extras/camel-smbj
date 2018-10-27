@@ -34,7 +34,6 @@ import java.util.concurrent.ConcurrentHashMap;
  */
 public class ConnectionCache {
 
-    private static final Integer DEFAULT_PORT_KEY_PART = 0;
     private static final Logger LOG = LoggerFactory.getLogger(ConnectionCache.class);
     private static Map<String, Connection> CONNECTION_CACHE = new ConcurrentHashMap<>();
 
@@ -61,7 +60,7 @@ public class ConnectionCache {
             try {
                 connection.close(true);
             } catch (IOException e) {
-                LOG.info("Could not close connection during release", e);
+                LOG.warn("Could not close connection during release", e);
             }
         }
     }
