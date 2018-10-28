@@ -15,7 +15,6 @@
  *****************************************************************/
 package at.ihet.camel.extras.smbj;
 
-import com.hierynomus.smbj.share.DiskEntry;
 import org.apache.camel.CamelContext;
 import org.apache.camel.Expression;
 import org.apache.camel.LoggingLevel;
@@ -34,8 +33,8 @@ public class SmbProcessStrategyFactory {
     private SmbProcessStrategyFactory() {
     }
 
-    public static GenericFileProcessStrategy<DiskEntry> createGenericFileProcessStrategy(CamelContext context,
-                                                                                         Map<String, Object> params) {
+    public static GenericFileProcessStrategy<SmbFile> createGenericFileProcessStrategy(final CamelContext context,
+                                                                                       final Map<String, Object> params) {
 
         // We assume a value is present only if its value not null for String and 'true' for boolean
         Expression moveExpression = (Expression) params.get("move");
@@ -46,52 +45,52 @@ public class SmbProcessStrategyFactory {
         boolean isMove = moveExpression != null || preMoveExpression != null || moveFailedExpression != null;
 
         if (isDelete) {
-            GenericFileDeleteProcessStrategy<DiskEntry> strategy = new GenericFileDeleteProcessStrategy<>();
+            GenericFileDeleteProcessStrategy<SmbFile> strategy = new GenericFileDeleteProcessStrategy<>();
             strategy.setExclusiveReadLockStrategy(getExclusiveReadLockStrategy(params));
             if (preMoveExpression != null) {
-                GenericFileExpressionRenamer<DiskEntry> renamer = new GenericFileExpressionRenamer<>();
+                GenericFileExpressionRenamer<SmbFile> renamer = new GenericFileExpressionRenamer<>();
                 renamer.setExpression(preMoveExpression);
                 strategy.setBeginRenamer(renamer);
             }
             if (moveFailedExpression != null) {
-                GenericFileExpressionRenamer<DiskEntry> renamer = new GenericFileExpressionRenamer<>();
+                GenericFileExpressionRenamer<SmbFile> renamer = new GenericFileExpressionRenamer<>();
                 renamer.setExpression(moveFailedExpression);
                 strategy.setFailureRenamer(renamer);
             }
             return strategy;
         } else if (isMove || isNoop) {
-            GenericFileRenameProcessStrategy<DiskEntry> strategy = new GenericFileRenameProcessStrategy<>();
+            GenericFileRenameProcessStrategy<SmbFile> strategy = new GenericFileRenameProcessStrategy<>();
             strategy.setExclusiveReadLockStrategy(getExclusiveReadLockStrategy(params));
             if (!isNoop && moveExpression != null) {
                 // move on commit is only possible if not noop
-                GenericFileExpressionRenamer<DiskEntry> renamer = new GenericFileExpressionRenamer<>();
+                GenericFileExpressionRenamer<SmbFile> renamer = new GenericFileExpressionRenamer<>();
                 renamer.setExpression(moveExpression);
                 strategy.setCommitRenamer(renamer);
             }
             // both move and noop supports pre move
             if (moveFailedExpression != null) {
-                GenericFileExpressionRenamer<DiskEntry> renamer = new GenericFileExpressionRenamer<>();
+                GenericFileExpressionRenamer<SmbFile> renamer = new GenericFileExpressionRenamer<>();
                 renamer.setExpression(moveFailedExpression);
                 strategy.setFailureRenamer(renamer);
             }
             // both move and noop supports pre move
             if (preMoveExpression != null) {
-                GenericFileExpressionRenamer<DiskEntry> renamer = new GenericFileExpressionRenamer<>();
+                GenericFileExpressionRenamer<SmbFile> renamer = new GenericFileExpressionRenamer<>();
                 renamer.setExpression(preMoveExpression);
                 strategy.setBeginRenamer(renamer);
             }
             return strategy;
         } else {
             // default strategy will do nothing
-            GenericFileNoOpProcessStrategy<DiskEntry> strategy = new GenericFileNoOpProcessStrategy<DiskEntry>();
+            GenericFileNoOpProcessStrategy<SmbFile> strategy = new GenericFileNoOpProcessStrategy<>();
             strategy.setExclusiveReadLockStrategy(getExclusiveReadLockStrategy(params));
             return strategy;
         }
     }
 
     @SuppressWarnings("unchecked")
-    private static GenericFileExclusiveReadLockStrategy<DiskEntry> getExclusiveReadLockStrategy(Map<String, Object> params) {
-        GenericFileExclusiveReadLockStrategy<DiskEntry> strategy = (GenericFileExclusiveReadLockStrategy<DiskEntry>) params.get("exclusiveReadLockStrategy");
+    private static GenericFileExclusiveReadLockStrategy<SmbFile> getExclusiveReadLockStrategy(final Map<String, Object> params) {
+        GenericFileExclusiveReadLockStrategy<SmbFile> strategy = (GenericFileExclusiveReadLockStrategy<SmbFile>) params.get("exclusiveReadLockStrategy");
         if (strategy != null) {
             return strategy;
         }
@@ -102,7 +101,7 @@ public class SmbProcessStrategyFactory {
             if ("none".equals(readLock) || "false".equals(readLock)) {
                 return null;
             } else if ("rename".equals(readLock)) {
-                GenericFileRenameExclusiveReadLockStrategy<DiskEntry> readLockStrategy = new GenericFileRenameExclusiveReadLockStrategy<DiskEntry>();
+                GenericFileRenameExclusiveReadLockStrategy<SmbFile> readLockStrategy = new GenericFileRenameExclusiveReadLockStrategy<>();
                 Long timeout = (Long) params.get("readLockTimeout");
                 if (timeout != null) {
                     readLockStrategy.setTimeout(timeout);

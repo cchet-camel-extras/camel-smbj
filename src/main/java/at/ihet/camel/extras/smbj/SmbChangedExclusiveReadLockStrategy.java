@@ -1,27 +1,20 @@
-/**************************************************************************************
- https://camel-extra.github.io
+/*****************************************************************
+ Copyright 2015-2018 the original author or authors.
 
- This program is free software; you can redistribute it and/or
- modify it under the terms of the GNU Lesser General Public License
- as published by the Free Software Foundation; either version 3
- of the License, or (at your option) any later version.
+ Licensed under the Apache License, Version 2.0 (the "License");
+ you may not use this file except in compliance with the License.
+ You may obtain a copy of the License at
 
- This program is distributed in the hope that it will be useful,
- but WITHOUT ANY WARRANTY; without even the implied warranty of
- MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- GNU Lesser General Public License for more details.
+ http://www.apache.org/licenses/LICENSE-2.0
 
-
- You should have received a copy of the GNU Lesser General Public
- License along with this program; if not, write to the Free Software
- Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA
- 02110-1301, USA.
-
- http://www.gnu.org/licenses/lgpl-3.0-standalone.html
- ***************************************************************************************/
+ Unless required by applicable law or agreed to in writing, software
+ distributed under the License is distributed on an "AS IS" BASIS,
+ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ See the License for the specific language governing permissions and
+ limitations under the License.
+ *****************************************************************/
 package at.ihet.camel.extras.smbj;
 
-import com.hierynomus.smbj.share.DiskEntry;
 import org.apache.camel.Exchange;
 import org.apache.camel.LoggingLevel;
 import org.apache.camel.component.file.GenericFile;
@@ -37,7 +30,7 @@ import java.util.Date;
 import java.util.List;
 
 
-public class SmbChangedExclusiveReadLockStrategy implements GenericFileExclusiveReadLockStrategy<DiskEntry> {
+public class SmbChangedExclusiveReadLockStrategy implements GenericFileExclusiveReadLockStrategy<SmbFile> {
     private static final Logger LOG = LoggerFactory.getLogger(SmbChangedExclusiveReadLockStrategy.class);
     private long timeout;
     private long checkInterval = 5000;
@@ -46,13 +39,13 @@ public class SmbChangedExclusiveReadLockStrategy implements GenericFileExclusive
     private long minAge;
 
     @Override
-    public void prepareOnStartup(GenericFileOperations<DiskEntry> tGenericFileOperations,
-                                 GenericFileEndpoint<DiskEntry> tGenericFileEndpoint) throws Exception {
+    public void prepareOnStartup(GenericFileOperations<SmbFile> tGenericFileOperations,
+                                 GenericFileEndpoint<SmbFile> tGenericFileEndpoint) throws Exception {
         // noop
     }
 
-    public boolean acquireExclusiveReadLock(GenericFileOperations<DiskEntry> operations,
-                                            GenericFile<DiskEntry> file,
+    public boolean acquireExclusiveReadLock(GenericFileOperations<SmbFile> operations,
+                                            GenericFile<SmbFile> file,
                                             Exchange exchange) throws Exception {
         boolean exclusive = false;
 
@@ -80,14 +73,14 @@ public class SmbChangedExclusiveReadLockStrategy implements GenericFileExclusive
 
             LOG.trace("Using full directory listing to update file information for {}.", file);
             // fast option not available (smb listFiles only handles directories), so list the directory and filter the file name
-            List<DiskEntry> files = operations.listFiles(file.getParent());
+            List<SmbFile> files = operations.listFiles(file.getParent());
 
             LOG.trace("List files {} found {} files", file.getAbsoluteFilePath(), files.size());
-            for (DiskEntry f : files) {
+            for (SmbFile f : files) {
                 // use same attribute sources as org.apacheextras.camel.component.jcifs.SmbConsumer#asGenericFile()
                 if (f.getFileName().equals(file.getFileNameOnly())) {
-                    newLastModified = f.getFileInformation().getBasicInformation().getChangeTime().toEpochMillis();
-                    newLength = f.getFileInformation().getStandardInformation().getEndOfFile();
+                    newLastModified = f.getLastModified();
+                    newLength = f.getFileLength();
                 }
             }
 
@@ -127,22 +120,22 @@ public class SmbChangedExclusiveReadLockStrategy implements GenericFileExclusive
     }
 
     @Override
-    public void releaseExclusiveReadLockOnAbort(GenericFileOperations<DiskEntry> operations,
-                                                GenericFile<DiskEntry> file,
+    public void releaseExclusiveReadLockOnAbort(GenericFileOperations<SmbFile> operations,
+                                                GenericFile<SmbFile> file,
                                                 Exchange exchange) throws Exception {
         // noop
     }
 
     @Override
-    public void releaseExclusiveReadLockOnRollback(GenericFileOperations<DiskEntry> operations,
-                                                   GenericFile<DiskEntry> file,
+    public void releaseExclusiveReadLockOnRollback(GenericFileOperations<SmbFile> operations,
+                                                   GenericFile<SmbFile> file,
                                                    Exchange exchange) throws Exception {
         // noop
     }
 
     @Override
-    public void releaseExclusiveReadLockOnCommit(GenericFileOperations<DiskEntry> operations,
-                                                 GenericFile<DiskEntry> file,
+    public void releaseExclusiveReadLockOnCommit(GenericFileOperations<SmbFile> operations,
+                                                 GenericFile<SmbFile> file,
                                                  Exchange exchange) throws Exception {
         // noop
     }

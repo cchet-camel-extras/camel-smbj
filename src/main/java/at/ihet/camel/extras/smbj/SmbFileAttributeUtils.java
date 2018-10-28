@@ -15,9 +15,9 @@
  *****************************************************************/
 package at.ihet.camel.extras.smbj;
 
-import com.hierynomus.msfscc.fileinformation.FileBasicInformation;
-
 /**
+ * This utility class provides utilities for file attributes.
+ *
  * @author Thomas Herzog <herzog.thomas81@gmail.com>
  * @since 10/27/2018
  */
@@ -29,27 +29,23 @@ public class SmbFileAttributeUtils {
     private static final long FILE_ATTRIBUTE_ARCHIVE = 0x20L;
     private static final long FILE_ATTRIBUTE_SYSTEM = 0x4L;
 
-    public static boolean isDirectory(FileBasicInformation info) {
-        return (info.getFileAttributes() & FILE_ATTRIBUTE_DIRECTORY) == FILE_ATTRIBUTE_DIRECTORY;
+    public static boolean isDirectory(final long attributes) {
+        return (attributes & FILE_ATTRIBUTE_DIRECTORY) == FILE_ATTRIBUTE_DIRECTORY;
     }
 
-    public static long getLastModified(FileBasicInformation info) {
-        return info.getLastWriteTime().toEpochMillis();
+    public static boolean isArchive(final long attributes) {
+        return (attributes & FILE_ATTRIBUTE_ARCHIVE) == FILE_ATTRIBUTE_ARCHIVE;
     }
 
-    public static boolean isArchive(FileBasicInformation info) {
-        return (info.getFileAttributes() & FILE_ATTRIBUTE_ARCHIVE) == FILE_ATTRIBUTE_ARCHIVE;
+    public static boolean isHidden(final long attributes) {
+        return (attributes & FILE_ATTRIBUTE_HIDDEN) == FILE_ATTRIBUTE_HIDDEN;
     }
 
-    public static boolean isHidden(FileBasicInformation info) {
-        return (info.getFileAttributes() & FILE_ATTRIBUTE_HIDDEN) == FILE_ATTRIBUTE_HIDDEN;
+    public static boolean isReadOnly(final long attributes) {
+        return (attributes & FILE_ATTRIBUTE_READONLY) == FILE_ATTRIBUTE_READONLY;
     }
 
-    public static boolean isReadOnly(FileBasicInformation info) {
-        return (info.getFileAttributes() & FILE_ATTRIBUTE_READONLY) == FILE_ATTRIBUTE_READONLY;
-    }
-
-    public static boolean isSystem(FileBasicInformation info) {
-        return (info.getFileAttributes() & FILE_ATTRIBUTE_SYSTEM) == FILE_ATTRIBUTE_SYSTEM;
+    public static boolean isSystem(final long attributes) {
+        return (attributes & FILE_ATTRIBUTE_SYSTEM) == FILE_ATTRIBUTE_SYSTEM;
     }
 }

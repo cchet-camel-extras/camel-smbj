@@ -32,15 +32,12 @@ import java.util.Optional;
  */
 public class SmbConsumer extends GenericFileConsumer<SmbFile> {
 
-    private final SmbConfiguration configuration;
-
     public SmbConsumer(SmbEndpoint endpoint,
                        Processor processor,
                        GenericFileOperations<SmbFile> operations) {
         super(Objects.requireNonNull(endpoint, "Cannot create consumer with null endpoint"),
               Objects.requireNonNull(processor, "Cannot create consumer with null processor"),
               Objects.requireNonNull(operations, "Cannot create consumer with null operations"));
-        this.configuration = endpoint.getConfiguration();
     }
 
     @Override
@@ -58,15 +55,18 @@ public class SmbConsumer extends GenericFileConsumer<SmbFile> {
                 return false;
             }
 
-            if (file.isDirectory()) {
-                if (endpoint.isRecursive()) {
-                    int nextDepth = depth++;
-                    pollDirectory(file.getFileNameFull(), fileList, nextDepth);
-                }
-            } else {
-                final GenericFile<SmbFile> genericFile = asGenericFile(fileName, file);
+            // Create generic file for file/directory
+            final GenericFile<SmbFile> genericFile = asGenericFile(fileName, file);
+
+            // If directory, recursive and valid directory, step into it
+            if (file.isDirectory() && endpoint.isRecursive() && isValidFile(genericFile, true, smbFiles)) {
+                int nextDepth = depth++;
+                pollDirectory(file.getFileNameFull(), fileList, nextDepth);
+            }
+            // Add file if valid
+            else {
                 if (isValidFile(genericFile, false, smbFiles)) {
-                    fileList.add(asGenericFile(fileName, file));
+                    fileList.add(genericFile);
                 }
             }
         }
@@ -86,18 +86,14 @@ public class SmbConsumer extends GenericFileConsumer<SmbFile> {
         answer.setAbsolute(true);
         answer.setEndpointPath("");
         answer.setAbsoluteFilePath(file.getFileNameFull());
+        answer.setRelativeFilePath(file.getFileNameFull().replace(path, ""));
+        answer.setFileName(file.getFileName());
         answer.setFileNameOnly(file.getFileName());
         answer.setFileLength(file.getFileLength());
-        answer.setFile(file);
         answer.setLastModified(file.getLastModified());
-        answer.setFileName(file.getFileNameFull());
-        answer.setAbsolute(true);
+        answer.setFile(file);
 
-        log.trace(String.format("absoluteFilePath[%s] filenameonly[%s] filename[%s] relativepath[%s]",
-                                answer.getAbsoluteFilePath(),
-                                answer.getFileNameOnly(),
-                                answer.getFileName(),
-                                answer.getRelativeFilePath()));
+        log.trace("");
         return answer;
     }
 
@@ -108,7 +104,7 @@ public class SmbConsumer extends GenericFileConsumer<SmbFile> {
         String onlyName = FileUtil.stripPath(doneFileName);
 
         for (final SmbFile smbFile : files) {
-            if (smbFile.getFileNameFull().equals(onlyName)) {
+            if (smbFile.getFileName().equals(onlyName)) {
                 return true;
             }
         }
@@ -118,7 +114,12 @@ public class SmbConsumer extends GenericFileConsumer<SmbFile> {
     }
 
     @Override
+    public SmbEndpoint getEndpoint() {
+        return (SmbEndpoint) super.getEndpoint();
+    }
+
+    @Override
     protected boolean isRetrieveFile() {
-        return Optional.ofNullable(((SmbEndpoint) getEndpoint()).getConfiguration().getDownload()).orElse(false);
+        return Optional.ofNullable(getEndpoint().getDownload()).orElse(true);
     }
 }

@@ -17,6 +17,8 @@ package at.ihet.camel.extras.smbj;
 
 import org.apache.camel.component.file.GenericFile;
 
+import java.io.File;
+
 /**
  * @author Thomas Herzog <herzog.thomas81@gmail.com>
  * @since 10/27/2018
@@ -25,6 +27,15 @@ public class SmbGenericFile extends GenericFile<SmbFile> {
 
     @Override
     public char getFileSeparator() {
-        return '\\';
+        return File.separatorChar;
+    }
+
+    @Override
+    public String toString() {
+        return String.format("absoluteFilePath: %s %srelativeFilePath: %s %sfileName: %s%sfileNameOnly: %s%s",
+                             getAbsoluteFilePath(), System.lineSeparator(),
+                             getRelativeFilePath(), System.lineSeparator(),
+                             getFileName(), System.lineSeparator(),
+                             getFileNameOnly(), System.lineSeparator());
     }
 }
