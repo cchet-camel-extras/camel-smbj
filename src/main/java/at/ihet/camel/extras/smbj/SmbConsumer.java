@@ -27,6 +27,8 @@ import java.util.Objects;
 import java.util.Optional;
 
 /**
+ * This class is the smb consumer implementation.
+ *
  * @author Thomas Herzog <herzog.thomas81@gmail.com>
  * @since 10/26/2018
  */

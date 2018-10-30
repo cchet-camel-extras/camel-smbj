@@ -1,0 +1,15 @@
+= camel-smbj
+
+This repository holds the prototype for a link:https://github.com/hierynomus/smbj[SMBJ] integration into camel, which hopefully gets merged
+into the link:https://github.com/camel-extra/camel-extra[Camel Extras] repository when its done.
+
+== Intention
+The camel-extras library only provides the integration for link:http://www.jcifs.org/[JCIFS] by the component camel-jcifs, which unfortunately only supports
+SMB 1.0 and is maintenance only. With an integration of smbj into camel, all available SMB versions should be supported and usable in camel routes. +
+
+See this issue for further details https://issues.apache.org/jira/browse/CAMEL-12563
+
+== Supported Camel Versions
+For now only Camel 2.21.0 is supported, due to the fact, that this implementation was actually meant for a customer of mine,
+who needs a SMB support for his link:https://www.redhat.com/en/technologies/jboss-middleware/fuse[Red Hat Fuse 7] POC,
+whereby Red Hat Fuse 7.1 supports camel 2.21.0. If this prototype gets approved by camel-extras, then newer camel versions will be supported as well.

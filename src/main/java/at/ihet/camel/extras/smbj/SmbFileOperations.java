@@ -36,9 +36,13 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.*;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.EnumSet;
 import java.util.List;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.regex.Matcher;
 import java.util.stream.Collectors;
 
@@ -69,39 +73,32 @@ public class SmbFileOperations implements GenericFileOperations<SmbFile> {
      * @return the normalized file name or path
      */
     private static String normalizeFileNameOrPath(final String name) {
-        if (name.startsWith(File.separator)) {
-            return name.replaceFirst(Matcher.quoteReplacement(File.separator), "");
+        if (name.startsWith("\\")) {
+            return name.replaceFirst(Matcher.quoteReplacement("\\"), "");
         }
         return name;
     }
 
     /**
-     * Maps the file information to the smb file model
+     * Downloads the file to a new input stream which is located in memory.
      *
-     * @param path the path he file has been listed from
-     * @param info the file info of the listed file
-     * @return the mapped smb file model object
-     * @see SmbFile
+     * @param is       the input stream of the file to download
+     * @param exchange the exchange where to set the input stream of the downloaded file in the in.body
      */
-    private SmbFile mapFileInformationToSmbFile(final String path,
-                                                final FileIdBothDirectoryInformation info) {
-        final long attributes = info.getFileAttributes();
-        final boolean directory = SmbFileAttributeUtils.isDirectory(attributes);
-        final String pathPrefix = (path.isEmpty()) ? path : (path + File.separator);
-        final long fileSize;
-        if (directory) {
-            fileSize = 0;
-        } else {
-            fileSize = info.getEndOfFile();
+    private static void downloadFileToMemoryAndCreateInputStream(final InputStream is,
+                                                                 final Exchange exchange) {
+        try (final ByteArrayOutputStream bos = new ByteArrayOutputStream()) {
+            byte[] buffer = new byte[4096];
+            int len;
+            while ((len = is.read(buffer)) > -1) {
+                bos.write(buffer, 0, len);
+            }
+            bos.flush();
+
+            exchange.getIn().setBody(new BufferedInputStream(new ByteArrayInputStream(bos.toByteArray())));
+        } catch (Exception e) {
+            throw new GenericFileOperationFailedException("Could not download file", e);
         }
-        return new SmbFile(directory,
-                           SmbFileAttributeUtils.isArchive(attributes),
-                           SmbFileAttributeUtils.isHidden(attributes),
-                           SmbFileAttributeUtils.isReadOnly(attributes),
-                           SmbFileAttributeUtils.isSystem(attributes),
-                           normalizeFileNameOrPath(pathPrefix + info.getFileName()),
-                           fileSize,
-                           info.getChangeTime().toEpochMillis());
     }
 
     @Override
@@ -156,42 +153,61 @@ public class SmbFileOperations implements GenericFileOperations<SmbFile> {
         }
     }
 
-    @Override
-    public boolean buildDirectory(final String directory,
-                                  final boolean absolute) throws GenericFileOperationFailedException {
-        final String normalizedDirectory = normalizeFileNameOrPath(directory);
+    /**
+     * Downloads the file represented by the input stream to a local directory and opens a stream to the new file and sets it on the exchange object.
+     *
+     * @param tmpDirectory the tmp directory where to store the file
+     * @param name         the name of the file to download
+     * @param is           the input stream of the file to download
+     * @param exchange     the exchange where to set the input stream of the downloaded file in the in.body
+     * @throws GenericFileOperationFailedException if the download fails
+     */
+    private static void downloadFileToTmpAndCreateInputStream(final String tmpDirectory,
+                                                              final String name,
+                                                              final InputStream is,
+                                                              final Exchange exchange) {
         try {
-            return invokeOnDiskShare(share -> {
-                if (!share.folderExists(normalizedDirectory)) {
-                    share.mkdir(normalizedDirectory);
-                }
-                LOG.warn(String.format("Tried to create directory which already not exists '%s'", normalizedDirectory));
-                return true;
-            });
+            Path tmpFile = Paths.get(tmpDirectory, name);
+            Files.createDirectories(tmpFile.getParent());
+            Files.deleteIfExists(tmpFile);
+            Files.copy(is, tmpFile);
+            is.close();
+
+            exchange.getIn().setHeader(Exchange.FILE_LOCAL_WORK_PATH, tmpFile.getParent().toAbsolutePath());
+
+            exchange.getIn().setBody(new BufferedInputStream(Files.newInputStream(tmpFile)));
         } catch (Exception e) {
-            throw new GenericFileOperationFailedException(String.format("Could not create directory '%s'", normalizedDirectory));
+            throw new GenericFileOperationFailedException("Could not download to temporary file", e);
         }
     }
 
-    @Override
-    public boolean retrieveFile(final String name,
-                                final Exchange exchange,
-                                final long size) throws GenericFileOperationFailedException {
-        final String normalizedName = normalizeFileNameOrPath(name);
-        try {
-            return invokeOnDiskShare(share -> {
-                if (share.fileExists(normalizedName)) {
-                    final DiskEntry entry = openReadOnlyFile(share, normalizedName);
-                    final com.hierynomus.smbj.share.File file = (com.hierynomus.smbj.share.File) entry;
-                    exchange.getIn().setBody(file.getInputStream());
-                    return true;
-                }
-                LOG.warn(String.format("Tried to retrieve a file which does not exists '%s'", normalizedName));
-                return false;
-            });
-        } catch (Exception e) {
-            throw new GenericFileOperationFailedException(String.format("Could not retrieve file '%s'", normalizedName), e);
+    /**
+     * Maps the file information to the smb file model
+     *
+     * @param path the path he file has been listed from
+     * @param info the file info of the listed file
+     * @return the mapped smb file model object
+     * @see SmbFile
+     */
+    private SmbFile mapFileInformationToSmbFile(final String path,
+                                                final FileIdBothDirectoryInformation info) {
+        final long attributes = info.getFileAttributes();
+        final boolean directory = SmbFileAttributeUtils.isDirectory(attributes);
+        final String pathPrefix = (path.isEmpty()) ? path : (path + "\\");
+        final long fileSize;
+        if (directory) {
+            fileSize = 0;
+        } else {
+            fileSize = info.getEndOfFile();
         }
+        return new SmbFile(directory,
+                           SmbFileAttributeUtils.isArchive(attributes),
+                           SmbFileAttributeUtils.isHidden(attributes),
+                           SmbFileAttributeUtils.isReadOnly(attributes),
+                           SmbFileAttributeUtils.isSystem(attributes),
+                           normalizeFileNameOrPath(pathPrefix + info.getFileName()),
+                           fileSize,
+                           info.getChangeTime().toEpochMillis());
     }
 
     @Override
@@ -419,6 +435,58 @@ public class SmbFileOperations implements GenericFileOperations<SmbFile> {
         LOG.trace("Moving existing file: {} to: {}", fileName, to);
         if (!renameFile(fileName, to)) {
             throw new GenericFileOperationFailedException("Cannot rename file from: " + fileName + " to: " + to);
+        }
+    }
+
+    @Override
+    public boolean buildDirectory(final String directory,
+                                  final boolean absolute) throws GenericFileOperationFailedException {
+        try {
+            return invokeOnDiskShare(share -> {
+                final String[] directories = directory.split(Matcher.quoteReplacement("\\"));
+                String buildDirectory = "";
+                for (final String part : directories) {
+                    if (!part.isEmpty()) {
+                        buildDirectory += (buildDirectory.isEmpty()) ? part : ("\\" + part);
+                        if (!share.folderExists(buildDirectory)) {
+                            share.mkdir(buildDirectory);
+                        }
+                        LOG.info(String.format("Tried to create directory which already not exists '%s'", buildDirectory));
+                    }
+                }
+                return true;
+            });
+        } catch (Exception e) {
+            throw new GenericFileOperationFailedException(String.format("Could not create directory '%s'", directory), e);
+        }
+    }
+
+    @Override
+    public boolean retrieveFile(final String name,
+                                final Exchange exchange,
+                                final long size) throws GenericFileOperationFailedException {
+        final String normalizedName = normalizeFileNameOrPath(name);
+        try {
+            return invokeOnDiskShare(share -> {
+                if (share.fileExists(normalizedName)) {
+                    final DiskEntry entry = openReadOnlyFile(share, normalizedName);
+                    final com.hierynomus.smbj.share.File file = (com.hierynomus.smbj.share.File) entry;
+                    // Download file to memory
+                    if (Optional.ofNullable(endpoint.getLocalWorkDirectory()).orElse("").trim().isEmpty()) {
+                        downloadFileToMemoryAndCreateInputStream(file.getInputStream(), exchange);
+                    }
+                    // Download file to temporary directory and return file
+                    else {
+                        final String actualTmpDir = endpoint.getLocalWorkDirectory() + File.separator + endpoint.getId();
+                        downloadFileToTmpAndCreateInputStream(actualTmpDir, name, file.getInputStream(), exchange);
+                    }
+                    return true;
+                }
+                LOG.warn(String.format("Tried to retrieve a file which does not exists '%s'", normalizedName));
+                return false;
+            });
+        } catch (Exception e) {
+            throw new GenericFileOperationFailedException(String.format("Could not retrieve file '%s'", normalizedName), e);
         }
     }
 

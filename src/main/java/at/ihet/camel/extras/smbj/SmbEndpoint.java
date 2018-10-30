@@ -25,7 +25,6 @@ import org.apache.camel.processor.idempotent.MemoryIdempotentRepository;
 import org.apache.camel.spi.UriEndpoint;
 import org.apache.camel.spi.UriParam;
 
-import java.io.File;
 import java.net.URI;
 
 /**
@@ -111,7 +110,7 @@ public class SmbEndpoint extends GenericFileEndpoint<SmbFile> {
 
     @Override
     public char getFileSeparator() {
-        return File.separatorChar;
+        return '\\';
     }
 
     @Override

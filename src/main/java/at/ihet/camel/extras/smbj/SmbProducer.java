@@ -20,6 +20,8 @@ import org.apache.camel.component.file.GenericFileProducer;
 import java.util.Objects;
 
 /**
+ * This class is the smb consumer implementation.
+ *
  * @author Thomas Herzog <herzog.thomas81@gmail.com>
  * @since 10/26/2018
  */
@@ -29,5 +31,10 @@ public class SmbProducer extends GenericFileProducer<SmbFile> {
                        final SmbFileOperations operations) {
         super(Objects.requireNonNull(endpoint, "Cannot create producer with null endpoint"),
               Objects.requireNonNull(operations, "Cannot create producer with null operations"));
+    }
+
+    @Override
+    public String getFileSeparator() {
+        return "\\";
     }
 }

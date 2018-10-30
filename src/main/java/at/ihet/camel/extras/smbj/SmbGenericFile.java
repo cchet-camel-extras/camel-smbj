@@ -17,9 +17,9 @@ package at.ihet.camel.extras.smbj;
 
 import org.apache.camel.component.file.GenericFile;
 
-import java.io.File;
-
 /**
+ * This class is the smb generic file implementation.
+ *
  * @author Thomas Herzog <herzog.thomas81@gmail.com>
  * @since 10/27/2018
  */
@@ -27,7 +27,7 @@ public class SmbGenericFile extends GenericFile<SmbFile> {
 
     @Override
     public char getFileSeparator() {
-        return File.separatorChar;
+        return '\\';
     }
 
     @Override
