@@ -13,8 +13,9 @@
  See the License for the specific language governing permissions and
  limitations under the License.
  *****************************************************************/
-package at.ihet.camel.extras.smbj;
+package at.ihet.camel.extras.smbj.strategy;
 
+import at.ihet.camel.extras.smbj.SmbFile;
 import org.apache.camel.Exchange;
 import org.apache.camel.LoggingLevel;
 import org.apache.camel.component.file.GenericFile;
@@ -29,18 +30,25 @@ import org.slf4j.LoggerFactory;
 import java.util.Date;
 import java.util.List;
 
-
+/**
+ * Copied from 'org.apache.camel.component.file.remote.strategy.FtpProcessStrategyFactory' because for smb as well.
+ *
+ * @author Thomas Herzog <herzog.thomas81@gmail.com>
+ * @since 10/27/2018
+ */
 public class SmbChangedExclusiveReadLockStrategy implements GenericFileExclusiveReadLockStrategy<SmbFile> {
+
     private static final Logger LOG = LoggerFactory.getLogger(SmbChangedExclusiveReadLockStrategy.class);
     private long timeout;
     private long checkInterval = 5000;
     private LoggingLevel readLockLoggingLevel = LoggingLevel.WARN;
     private long minLength = 1;
     private long minAge;
+    private boolean fastExistsCheck;
 
     @Override
-    public void prepareOnStartup(GenericFileOperations<SmbFile> tGenericFileOperations,
-                                 GenericFileEndpoint<SmbFile> tGenericFileEndpoint) throws Exception {
+    public void prepareOnStartup(GenericFileOperations<SmbFile> genericFileOperations,
+                                 GenericFileEndpoint<SmbFile> genericFileEndpoint) throws Exception {
         // noop
     }
 
@@ -54,7 +62,7 @@ public class SmbChangedExclusiveReadLockStrategy implements GenericFileExclusive
         long lastModified = Long.MIN_VALUE;
         long length = Long.MIN_VALUE;
         StopWatch watch = new StopWatch();
-        long startTime = (new Date()).getTime();
+        long startTime = new Date().getTime();
 
         while (!exclusive) {
             // timeout check
@@ -71,23 +79,50 @@ public class SmbChangedExclusiveReadLockStrategy implements GenericFileExclusive
             long newLastModified = 0;
             long newLength = 0;
 
-            LOG.trace("Using full directory listing to update file information for {}.", file);
-            // fast option not available (smb listFiles only handles directories), so list the directory and filter the file name
-            List<SmbFile> files = operations.listFiles(file.getParent());
-
-            LOG.trace("List files {} found {} files", file.getAbsoluteFilePath(), files.size());
+            List<SmbFile> files;
+            if (fastExistsCheck) {
+                // use the absolute file path to only pickup the file we want to check, this avoids expensive
+                // list operations if we have a lot of files in the directory
+                String path = file.getAbsoluteFilePath();
+                if (path.equals("/") || path.equals("\\")) {
+                    // special for root (= home) directory
+                    LOG.trace("Using fast exists to update file information in home directory");
+                    files = operations.listFiles();
+                } else {
+                    LOG.trace(String.format("Using fast exists to update file information for '%s'", path));
+                    files = operations.listFiles(path);
+                }
+            } else {
+                // fast option not enabled, so list the directory and filter the file name
+                String path = file.getParent();
+                if (path.equals("/") || path.equals("\\")) {
+                    // special for root (= home) directory
+                    LOG.trace("Using full directory listing in home directory to update file information. Consider enabling fastExistsCheck option.");
+                    files = operations.listFiles();
+                } else {
+                    LOG.trace(String.format("Using full directory listing to update file information for '%s'. Consider enabling fastExistsCheck option.", path));
+                    files = operations.listFiles(path);
+                }
+            }
+            LOG.trace(String.format("List files '%s' found '%d' files", file.getAbsoluteFilePath(), files.size()));
             for (SmbFile f : files) {
-                // use same attribute sources as org.apacheextras.camel.component.jcifs.SmbConsumer#asGenericFile()
-                if (f.getFileName().equals(file.getFileNameOnly())) {
-                    newLastModified = f.getLastModified();
+                boolean match;
+                if (fastExistsCheck) {
+                    // uses the absolute file path as well
+                    match = f.getFileNameFull().equals(file.getAbsoluteFilePath()) || f.getFileName().equals(file.getFileNameOnly());
+                } else {
+                    match = f.getFileName().equals(file.getFileNameOnly());
+                }
+                if (match) {
                     newLength = f.getFileLength();
+                    newLastModified = f.getLastModified();
                 }
             }
 
-            LOG.trace("Previous last modified: " + lastModified + ", new last modified: " + newLastModified);
-            LOG.trace("Previous length: " + length + ", new length: " + newLength);
+            LOG.trace(String.format("Previous last modified: '%d', new last modified: %d", lastModified, newLastModified));
+            LOG.trace(String.format("Previous length: '%d', new length: '%d'", length, newLength));
             long newOlderThan = startTime + watch.taken() - minAge;
-            LOG.trace("New older than threshold: {}", newOlderThan);
+            LOG.trace(String.format("New older than threshold: '%d'", newOlderThan));
 
             if (newLength >= minLength && ((minAge == 0 && newLastModified == lastModified && newLength == length) || (minAge != 0 && newLastModified < newOlderThan))) {
                 LOG.trace("Read lock acquired.");
@@ -109,7 +144,7 @@ public class SmbChangedExclusiveReadLockStrategy implements GenericFileExclusive
     }
 
     private boolean sleep() {
-        LOG.trace("Exclusive read lock not granted. Sleeping for " + checkInterval + " millis.");
+        LOG.trace(String.format("Exclusive read lock not granted. Sleeping for '%d' millis.", checkInterval));
         try {
             Thread.sleep(checkInterval);
             return false;
@@ -163,6 +198,16 @@ public class SmbChangedExclusiveReadLockStrategy implements GenericFileExclusive
         this.readLockLoggingLevel = readLockLoggingLevel;
     }
 
+    @Override
+    public void setMarkerFiler(boolean markerFiler) {
+        // noop - not supported by ftp
+    }
+
+    @Override
+    public void setDeleteOrphanLockFiles(boolean deleteOrphanLockFiles) {
+        // noop - not supported by ftp
+    }
+
     public long getMinLength() {
         return minLength;
     }
@@ -179,13 +224,11 @@ public class SmbChangedExclusiveReadLockStrategy implements GenericFileExclusive
         this.minAge = minAge;
     }
 
-    @Override
-    public void setMarkerFiler(boolean markerFiler) {
-        // noop - not supported by smb
+    public boolean isFastExistsCheck() {
+        return fastExistsCheck;
     }
 
-    @Override
-    public void setDeleteOrphanLockFiles(boolean deleteOrphanLockFiles) {
-        // noop - not supported by smb
+    public void setFastExistsCheck(boolean fastExistsCheck) {
+        this.fastExistsCheck = fastExistsCheck;
     }
 }

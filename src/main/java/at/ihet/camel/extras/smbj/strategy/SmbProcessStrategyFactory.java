@@ -13,11 +13,11 @@
  See the License for the specific language governing permissions and
  limitations under the License.
  *****************************************************************/
-package at.ihet.camel.extras.smbj;
+package at.ihet.camel.extras.smbj.strategy;
 
+import at.ihet.camel.extras.smbj.SmbFile;
 import org.apache.camel.CamelContext;
 import org.apache.camel.Expression;
-import org.apache.camel.LoggingLevel;
 import org.apache.camel.component.file.GenericFileExclusiveReadLockStrategy;
 import org.apache.camel.component.file.GenericFileProcessStrategy;
 import org.apache.camel.component.file.strategy.*;
@@ -26,10 +26,13 @@ import org.apache.camel.util.ObjectHelper;
 import java.util.Map;
 
 /**
+ * Copied from 'org.apache.camel.component.file.remote.strategy.FtpChangedExclusiveReadLockStrategy' because for smb as well.
+ *
  * @author Thomas Herzog <herzog.thomas81@gmail.com>
  * @since 10/27/2018
  */
 public class SmbProcessStrategyFactory {
+
     private SmbProcessStrategyFactory() {
     }
 
@@ -45,47 +48,48 @@ public class SmbProcessStrategyFactory {
         boolean isMove = moveExpression != null || preMoveExpression != null || moveFailedExpression != null;
 
         if (isDelete) {
-            GenericFileDeleteProcessStrategy<SmbFile> strategy = new GenericFileDeleteProcessStrategy<>();
+            GenericFileDeleteProcessStrategy<SmbFile> strategy = new GenericFileDeleteProcessStrategy<SmbFile>();
             strategy.setExclusiveReadLockStrategy(getExclusiveReadLockStrategy(params));
             if (preMoveExpression != null) {
-                GenericFileExpressionRenamer<SmbFile> renamer = new GenericFileExpressionRenamer<>();
+                GenericFileExpressionRenamer<SmbFile> renamer = new GenericFileExpressionRenamer<SmbFile>();
                 renamer.setExpression(preMoveExpression);
                 strategy.setBeginRenamer(renamer);
             }
             if (moveFailedExpression != null) {
-                GenericFileExpressionRenamer<SmbFile> renamer = new GenericFileExpressionRenamer<>();
+                GenericFileExpressionRenamer<SmbFile> renamer = new GenericFileExpressionRenamer<SmbFile>();
                 renamer.setExpression(moveFailedExpression);
                 strategy.setFailureRenamer(renamer);
             }
             return strategy;
         } else if (isMove || isNoop) {
-            GenericFileRenameProcessStrategy<SmbFile> strategy = new GenericFileRenameProcessStrategy<>();
+            GenericFileRenameProcessStrategy<SmbFile> strategy = new GenericFileRenameProcessStrategy<SmbFile>();
             strategy.setExclusiveReadLockStrategy(getExclusiveReadLockStrategy(params));
             if (!isNoop && moveExpression != null) {
                 // move on commit is only possible if not noop
-                GenericFileExpressionRenamer<SmbFile> renamer = new GenericFileExpressionRenamer<>();
+                GenericFileExpressionRenamer<SmbFile> renamer = new GenericFileExpressionRenamer<SmbFile>();
                 renamer.setExpression(moveExpression);
                 strategy.setCommitRenamer(renamer);
             }
             // both move and noop supports pre move
             if (moveFailedExpression != null) {
-                GenericFileExpressionRenamer<SmbFile> renamer = new GenericFileExpressionRenamer<>();
+                GenericFileExpressionRenamer<SmbFile> renamer = new GenericFileExpressionRenamer<SmbFile>();
                 renamer.setExpression(moveFailedExpression);
                 strategy.setFailureRenamer(renamer);
             }
             // both move and noop supports pre move
             if (preMoveExpression != null) {
-                GenericFileExpressionRenamer<SmbFile> renamer = new GenericFileExpressionRenamer<>();
+                GenericFileExpressionRenamer<SmbFile> renamer = new GenericFileExpressionRenamer<SmbFile>();
                 renamer.setExpression(preMoveExpression);
                 strategy.setBeginRenamer(renamer);
             }
             return strategy;
         } else {
             // default strategy will do nothing
-            GenericFileNoOpProcessStrategy<SmbFile> strategy = new GenericFileNoOpProcessStrategy<>();
+            GenericFileNoOpProcessStrategy<SmbFile> strategy = new GenericFileNoOpProcessStrategy<SmbFile>();
             strategy.setExclusiveReadLockStrategy(getExclusiveReadLockStrategy(params));
             return strategy;
         }
+
     }
 
     @SuppressWarnings("unchecked")
@@ -101,7 +105,7 @@ public class SmbProcessStrategyFactory {
             if ("none".equals(readLock) || "false".equals(readLock)) {
                 return null;
             } else if ("rename".equals(readLock)) {
-                GenericFileRenameExclusiveReadLockStrategy<SmbFile> readLockStrategy = new GenericFileRenameExclusiveReadLockStrategy<>();
+                GenericFileRenameExclusiveReadLockStrategy<SmbFile> readLockStrategy = new GenericFileRenameExclusiveReadLockStrategy<SmbFile>();
                 Long timeout = (Long) params.get("readLockTimeout");
                 if (timeout != null) {
                     readLockStrategy.setTimeout(timeout);
@@ -110,9 +114,9 @@ public class SmbProcessStrategyFactory {
                 if (checkInterval != null) {
                     readLockStrategy.setCheckInterval(checkInterval);
                 }
-                LoggingLevel logLevel = (LoggingLevel) params.get("readLockLoggingLevel");
-                if (null != logLevel) {
-                    readLockStrategy.setReadLockLoggingLevel(logLevel);
+                Boolean readLockMarkerFile = (Boolean) params.get("readLockMarkerFile");
+                if (readLockMarkerFile != null) {
+                    readLockStrategy.setMarkerFiler(readLockMarkerFile);
                 }
                 return readLockStrategy;
             } else if ("changed".equals(readLock)) {
@@ -133,9 +137,13 @@ public class SmbProcessStrategyFactory {
                 if (null != minAge) {
                     readLockStrategy.setMinAge(minAge);
                 }
-                LoggingLevel logLevel = (LoggingLevel) params.get("readLockLoggingLevel");
-                if (null != logLevel) {
-                    readLockStrategy.setReadLockLoggingLevel(logLevel);
+                Boolean fastExistsCheck = (Boolean) params.get("fastExistsCheck");
+                if (fastExistsCheck != null) {
+                    readLockStrategy.setFastExistsCheck(fastExistsCheck);
+                }
+                Boolean readLockMarkerFile = (Boolean) params.get("readLockMarkerFile");
+                if (readLockMarkerFile != null) {
+                    readLockStrategy.setMarkerFiler(readLockMarkerFile);
                 }
                 return readLockStrategy;
             }

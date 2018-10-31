@@ -17,6 +17,7 @@ package at.ihet.camel.extras.smbj;
 
 
 import com.hierynomus.msdtyp.AccessMask;
+import com.hierynomus.msfscc.fileinformation.FileAllInformation;
 import com.hierynomus.msfscc.fileinformation.FileIdBothDirectoryInformation;
 import com.hierynomus.mssmb2.SMB2CreateDisposition;
 import com.hierynomus.mssmb2.SMB2ShareAccess;
@@ -39,10 +40,7 @@ import java.io.*;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.util.EnumSet;
-import java.util.List;
-import java.util.Objects;
-import java.util.Optional;
+import java.util.*;
 import java.util.regex.Matcher;
 import java.util.stream.Collectors;
 
@@ -97,7 +95,7 @@ public class SmbFileOperations implements GenericFileOperations<SmbFile> {
 
             exchange.getIn().setBody(new BufferedInputStream(new ByteArrayInputStream(bos.toByteArray())));
         } catch (Exception e) {
-            throw new GenericFileOperationFailedException("Could not download file", e);
+            throw new GenericFileOperationFailedException("Could not download file: '%s'", e);
         }
     }
 
@@ -116,7 +114,6 @@ public class SmbFileOperations implements GenericFileOperations<SmbFile> {
                     share.rm(normalizedName);
                     return true;
                 }
-                LOG.warn(String.format("Tried to delete file which does not exists '%s'", normalizedName));
                 return false;
             });
         } catch (Exception e) {
@@ -145,7 +142,6 @@ public class SmbFileOperations implements GenericFileOperations<SmbFile> {
                     openWritableFile(share, normalizedFrom).rename(normalizedTo, true);
                     return true;
                 }
-                LOG.warn(String.format("Tried to rename file which does not exists '%s'", normalizedFrom));
                 return false;
             });
         } catch (Exception e) {
@@ -188,6 +184,7 @@ public class SmbFileOperations implements GenericFileOperations<SmbFile> {
      * @param info the file info of the listed file
      * @return the mapped smb file model object
      * @see SmbFile
+     * @see FileIdBothDirectoryInformation
      */
     private SmbFile mapFileInformationToSmbFile(final String path,
                                                 final FileIdBothDirectoryInformation info) {
@@ -210,6 +207,36 @@ public class SmbFileOperations implements GenericFileOperations<SmbFile> {
                            info.getChangeTime().toEpochMillis());
     }
 
+    /**
+     * Maps the file information to the smb file model
+     *
+     * @param path the path he file has been listed from
+     * @param info the file info of the listed file
+     * @return the mapped smb file model object
+     * @see SmbFile
+     * @see FileAllInformation
+     */
+    private SmbFile mapFileInformationToSmbFile(final String path,
+                                                final FileAllInformation info) {
+        final long attributes = info.getBasicInformation().getFileAttributes();
+        final boolean directory = SmbFileAttributeUtils.isDirectory(attributes);
+        final String pathPrefix = (path.isEmpty()) ? path : (path + "\\");
+        final long fileSize;
+        if (directory) {
+            fileSize = 0;
+        } else {
+            fileSize = info.getStandardInformation().getEndOfFile();
+        }
+        return new SmbFile(directory,
+                           SmbFileAttributeUtils.isArchive(attributes),
+                           SmbFileAttributeUtils.isHidden(attributes),
+                           SmbFileAttributeUtils.isReadOnly(attributes),
+                           SmbFileAttributeUtils.isSystem(attributes),
+                           normalizeFileNameOrPath(pathPrefix + info.getNameInformation()),
+                           fileSize,
+                           info.getBasicInformation().getChangeTime().toEpochMillis());
+    }
+
     @Override
     public void releaseRetrievedFileResources(Exchange exchange) throws GenericFileOperationFailedException {
         // INFO: Nothing to do
@@ -228,7 +255,7 @@ public class SmbFileOperations implements GenericFileOperations<SmbFile> {
                 LOG.debug(String.format("An existing file already exists: '%s'. Ignore and do not override it.", normalizedName));
                 return false;
             } else if (endpoint.getFileExist() == GenericFileExist.Fail) {
-                throw new GenericFileOperationFailedException("File already exist: " + normalizedName + ". Cannot write new file.");
+                throw new GenericFileOperationFailedException(String.format("File already exist: '%s'. Cannot write new file.", normalizedName));
             } else if (endpoint.getFileExist() == GenericFileExist.Move) {
                 // move any existing file first
                 doMoveExistingFile(normalizedName);
@@ -238,10 +265,8 @@ public class SmbFileOperations implements GenericFileOperations<SmbFile> {
                 // with success as the existing target file have been deleted
                 LOG.debug("Eagerly deleting existing file: " + normalizedName);
                 if (!deleteFile(normalizedName)) {
-                    throw new GenericFileOperationFailedException("Cannot delete file: " + normalizedName);
+                    throw new GenericFileOperationFailedException(String.format("Cannot delete file: '%s'", normalizedName));
                 }
-
-                throw new GenericFileOperationFailedException("Cannot store the file, because it already exists");
             } else if (endpoint.getFileExist() == GenericFileExist.Append) {
                 append = true;
             }
@@ -300,12 +325,23 @@ public class SmbFileOperations implements GenericFileOperations<SmbFile> {
     @Override
     public List<SmbFile> listFiles(final String path) throws GenericFileOperationFailedException {
         try {
-            return invokeOnDiskShare(share -> share.list(path).stream()
-                                                   // Exclude Linux . and .. directories
-                                                   .filter(entry -> !entry.getFileName().equals("."))
-                                                   .filter(entry -> !entry.getFileName().equals(".."))
-                                                   .map(info -> mapFileInformationToSmbFile(path, info))
-                                                   .collect(Collectors.toList()));
+            return invokeOnDiskShare(share -> {
+                if (!share.fileExists(path) && !share.folderExists(path)) {
+                    return Collections.emptyList();
+                }
+                // Lock strategy wants to list files with filename, which is not supported by smbj
+                if (share.fileExists(path)) {
+                    final FileAllInformation info = share.getFileInformation(path, FileAllInformation.class);
+                    return Collections.singletonList(mapFileInformationToSmbFile(path, info));
+                }
+
+                return share.list(path).stream()
+                            // Exclude Linux . and .. directories
+                            .filter(entry -> !entry.getFileName().equals("."))
+                            .filter(entry -> !entry.getFileName().equals(".."))
+                            .map(info -> mapFileInformationToSmbFile(path, info))
+                            .collect(Collectors.toList());
+            });
         } catch (Exception e) {
             throw new GenericFileOperationFailedException(String.format("Could not list files for path: '%s'", path), e);
         }
@@ -423,18 +459,18 @@ public class SmbFileOperations implements GenericFileOperations<SmbFile> {
         // deal if there already exists a file
         if (existsFile(to)) {
             if (endpoint.isEagerDeleteTargetFile()) {
-                LOG.trace("Deleting existing file: {}", to);
+                LOG.trace(String.format("Deleting existing file: %s", to));
                 if (!deleteFile(to)) {
-                    throw new GenericFileOperationFailedException("Cannot delete file: " + to);
+                    throw new GenericFileOperationFailedException(String.format("Cannot delete file: %s", to));
                 }
             } else {
-                throw new GenericFileOperationFailedException("Cannot moved existing file from: " + fileName + " to: " + to + " as there already exists a file: " + to);
+                throw new GenericFileOperationFailedException(String.format("Cannot moved existing file from: '%s' -> '%s' as there already exists a file with that name", fileName, to));
             }
         }
 
         LOG.trace("Moving existing file: {} to: {}", fileName, to);
         if (!renameFile(fileName, to)) {
-            throw new GenericFileOperationFailedException("Cannot rename file from: " + fileName + " to: " + to);
+            throw new GenericFileOperationFailedException(String.format("Cannot rename file from: '%s' -> '%s'", fileName, to));
         }
     }
 
@@ -451,7 +487,6 @@ public class SmbFileOperations implements GenericFileOperations<SmbFile> {
                         if (!share.folderExists(buildDirectory)) {
                             share.mkdir(buildDirectory);
                         }
-                        LOG.info(String.format("Tried to create directory which already not exists '%s'", buildDirectory));
                     }
                 }
                 return true;
@@ -482,7 +517,6 @@ public class SmbFileOperations implements GenericFileOperations<SmbFile> {
                     }
                     return true;
                 }
-                LOG.warn(String.format("Tried to retrieve a file which does not exists '%s'", normalizedName));
                 return false;
             });
         } catch (Exception e) {

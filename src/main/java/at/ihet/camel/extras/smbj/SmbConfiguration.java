@@ -22,9 +22,7 @@ import org.apache.camel.component.file.GenericFileConfiguration;
 import org.apache.camel.spi.UriParam;
 
 import java.net.URI;
-import java.util.Optional;
-import java.util.Random;
-import java.util.UUID;
+import java.util.*;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -43,8 +41,8 @@ public class SmbConfiguration extends GenericFileConfiguration {
     private String username;
     @UriParam(name = "password", description = "The password for the authentication", javaType = "java.lang.String", secret = true)
     private String password;
-    @UriParam(name = "version", defaultValue = "unkown", defaultValueNote = "Client will determine what dialect to use", description = "The version to use [unkown|2_0_2|2_1|2xx|3_0|3_0_2|3_1_1]", javaType = "java.lang.String")
-    private String version = "unkown";
+    @UriParam(name = "versions", defaultValue = "unkown", defaultValueNote = "Client will determine what dialect to use", description = "The comma separated list of versions to use [unkown|2_0_2|2_1|2xx]", javaType = "java.lang.String")
+    private String versions = "unkown";
     @UriParam(name = "authType", defaultValue = "ntlm", defaultValueNote = "USe NTLM authentication as default", description = "The authentication type to use default: ntlm or spnego", javaType = "java.lang.String")
     private String authType = "ntlm";
     @UriParam(name = "dfs", defaultValue = "false", defaultValueNote = "Assuming that no DFS services are available", description = "True if DFS services are available, false otherwise", javaType = "java.lang.Boolean")
@@ -79,7 +77,7 @@ public class SmbConfiguration extends GenericFileConfiguration {
     }
 
     public SmbConfig getSmbConfig() {
-        builder.withDialects(resolveSmbDialect())
+        builder.withDialects(resolveSmbDialectsFromVersions())
                .withDfsEnabled(dfs)
                .withMultiProtocolNegotiate(multiProtocol)
                .withRandomProvider(new Random(System.currentTimeMillis()))
@@ -110,11 +108,20 @@ public class SmbConfiguration extends GenericFileConfiguration {
         return authType.equalsIgnoreCase("ntlm");
     }
 
-    private SMB2Dialect resolveSmbDialect() {
-        if (version.equalsIgnoreCase("unkown")) {
-            return SMB2Dialect.UNKNOWN;
+    private SMB2Dialect[] resolveSmbDialectsFromVersions() {
+        final String[] versionArr = versions.split(",");
+        final List<SMB2Dialect> dialects = new LinkedList<>();
+        for (final String version : versionArr) {
+            final String normalizedVersion = version.trim().toUpperCase();
+            if (!normalizedVersion.isEmpty()) {
+                if (version.equalsIgnoreCase(SMB2Dialect.UNKNOWN.name())) {
+                    dialects.add(SMB2Dialect.UNKNOWN);
+                } else {
+                    dialects.add(SMB2Dialect.valueOf(String.format("SMB_%s", version.trim().toUpperCase())));
+                }
+            }
         }
-        return SMB2Dialect.valueOf(String.format("SMB_%s", version.toUpperCase()));
+        return dialects.toArray(new SMB2Dialect[dialects.size()]);
     }
 
     //<editor-fold desc="Getter and Setter">
@@ -142,12 +149,12 @@ public class SmbConfiguration extends GenericFileConfiguration {
         this.password = password;
     }
 
-    public String getVersion() {
-        return version;
+    public String getVersions() {
+        return versions;
     }
 
-    public void setVersion(String version) {
-        this.version = version;
+    public void setVersions(String versions) {
+        this.versions = versions;
     }
 
     public String getAuthType() {

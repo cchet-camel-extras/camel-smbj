@@ -26,6 +26,7 @@ import org.apache.camel.spi.UriEndpoint;
 import org.apache.camel.spi.UriParam;
 
 import java.net.URI;
+import java.util.Map;
 
 /**
  * @author Thomas Herzog <herzog.thomas81@gmail.com>
@@ -40,6 +41,8 @@ public class SmbEndpoint extends GenericFileEndpoint<SmbFile> {
 
     @UriParam(name = "download", defaultValue = "false", defaultValueNote = "Per default files are not downloaded", description = "True if file download is intended, false otherwise", javaType = "java.lang.Boolean")
     private Boolean download = false;
+    @UriParam(name = "fastExistsCheck", defaultValue = "false", defaultValueNote = "Fast exists check is disabled per default", description = "True if fast exist check mode is enabled, false otherwise", javaType = "java.lang.Boolean")
+    private boolean fastExistsCheck = false;
 
     public SmbEndpoint(final String endpointUri,
                        final SmbComponent component,
@@ -123,7 +126,14 @@ public class SmbEndpoint extends GenericFileEndpoint<SmbFile> {
         return (SmbConfiguration) configuration;
     }
 
-    public void configure(URI uri) {
+    @Override
+    protected Map<String, Object> getParamsAsMap() {
+        Map<String, Object> map = super.getParamsAsMap();
+        map.put("fastExistsCheck", fastExistsCheck);
+        return map;
+    }
+
+    private void configure(URI uri) {
         setHost(uri.getHost());
         if (uri.getPort() <= 0) {
             setPort(null);
@@ -167,6 +177,14 @@ public class SmbEndpoint extends GenericFileEndpoint<SmbFile> {
 
     public void setDownload(Boolean download) {
         this.download = download;
+    }
+
+    public boolean isFastExistsCheck() {
+        return fastExistsCheck;
+    }
+
+    public void setFastExistsCheck(boolean fastExistsCheck) {
+        this.fastExistsCheck = fastExistsCheck;
     }
     //</editor-fold>
 }

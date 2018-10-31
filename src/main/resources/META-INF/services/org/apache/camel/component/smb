@@ -14,4 +14,4 @@
 # limitations under the License.
 ####################################################################
 class=at.ihet.camel.extras.smbj.SmbComponent
-strategy.factory.class=at.ihet.camel.extras.smbj.SmbProcessStrategyFactory
+strategy.factory.class=at.ihet.camel.extras.smbj.strategy.SmbProcessStrategyFactory
