@@ -22,9 +22,7 @@ import org.apache.camel.component.file.GenericFileConsumer;
 import org.apache.camel.component.file.GenericFileOperations;
 import org.apache.camel.util.FileUtil;
 
-import java.util.List;
-import java.util.Objects;
-import java.util.Optional;
+import java.util.*;
 
 /**
  * This class is the smb consumer implementation.
@@ -51,6 +49,10 @@ public class SmbConsumer extends GenericFileConsumer<SmbFile> {
 
         final List<SmbFile> smbFiles = operations.listFiles(fileName);
 
+        if (getEndpoint().isPreSort()) {
+            Collections.sort(smbFiles, Comparator.comparing(SmbFile::getFileNameFull));
+        }
+
         // Walk found files
         for (final SmbFile file : smbFiles) {
             if (!canPollMoreFiles(fileList)) {
@@ -58,7 +60,7 @@ public class SmbConsumer extends GenericFileConsumer<SmbFile> {
             }
 
             // Create generic file for file/directory
-            final GenericFile<SmbFile> genericFile = asGenericFile(fileName, file);
+            final GenericFile<SmbFile> genericFile = asGenericFile(file);
 
             // If directory, recursive and valid directory, step into it
             if (file.isDirectory() && endpoint.isRecursive() && isValidFile(genericFile, true, smbFiles)) {
@@ -82,14 +84,13 @@ public class SmbConsumer extends GenericFileConsumer<SmbFile> {
         // TODO: What we need to do form smb file?
     }
 
-    private GenericFile<SmbFile> asGenericFile(String path,
-                                               SmbFile file) {
+    private GenericFile<SmbFile> asGenericFile(SmbFile file) {
         final SmbGenericFile answer = new SmbGenericFile();
         answer.setAbsolute(true);
         answer.setEndpointPath("");
         answer.setAbsoluteFilePath(file.getFileNameFull());
-        answer.setRelativeFilePath(file.getFileNameFull().replace(path, ""));
-        answer.setFileName(file.getFileName());
+        answer.setRelativeFilePath(file.getParentDirectory());
+        answer.setFileName(answer.getRelativeFilePath());
         answer.setFileNameOnly(file.getFileName());
         answer.setFileLength(file.getFileLength());
         answer.setLastModified(file.getLastModified());
@@ -104,15 +105,10 @@ public class SmbConsumer extends GenericFileConsumer<SmbFile> {
                                 String doneFileName,
                                 List<SmbFile> files) {
         String onlyName = FileUtil.stripPath(doneFileName);
-
-        for (final SmbFile smbFile : files) {
-            if (smbFile.getFileName().equals(onlyName)) {
-                return true;
-            }
-        }
+        final boolean result = files.stream().anyMatch(smbFile -> smbFile.getFileName().equals(onlyName));
 
         log.trace(String.format("Done file: %s does not exist", doneFileName));
-        return false;
+        return result;
     }
 
     @Override
@@ -122,6 +118,6 @@ public class SmbConsumer extends GenericFileConsumer<SmbFile> {
 
     @Override
     protected boolean isRetrieveFile() {
-        return Optional.ofNullable(getEndpoint().getDownload()).orElse(true);
+        return Optional.ofNullable(getEndpoint().getDownload()).orElse(false);
     }
 }

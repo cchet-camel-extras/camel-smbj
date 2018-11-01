@@ -169,8 +169,7 @@ public class SmbFileOperations implements GenericFileOperations<SmbFile> {
             Files.copy(is, tmpFile);
             is.close();
 
-            exchange.getIn().setHeader(Exchange.FILE_LOCAL_WORK_PATH, tmpFile.getParent().toAbsolutePath());
-
+            exchange.getIn().setHeader(Exchange.FILE_LOCAL_WORK_PATH, tmpFile.toFile());
             exchange.getIn().setBody(new BufferedInputStream(Files.newInputStream(tmpFile)));
         } catch (Exception e) {
             throw new GenericFileOperationFailedException("Could not download to temporary file", e);
