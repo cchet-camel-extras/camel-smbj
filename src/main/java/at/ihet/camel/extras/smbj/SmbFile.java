@@ -15,6 +15,7 @@
  *****************************************************************/
 package at.ihet.camel.extras.smbj;
 
+import java.io.File;
 import java.util.Arrays;
 import java.util.regex.Matcher;
 
@@ -52,9 +53,9 @@ public class SmbFile {
         this.fileLength = fileLength;
         this.lastModified = lastModified;
 
-        final String[] fileNameParts = fileNameFull.split(Matcher.quoteReplacement("\\"));
+        final String[] fileNameParts = fileNameFull.split(Matcher.quoteReplacement("\\|/"));
         fileName = fileNameParts[fileNameParts.length - 1];
-        parentDirectory = String.join("\\", Arrays.copyOfRange(fileNameParts, 0, fileNameParts.length - 1));
+        parentDirectory = String.join(File.pathSeparator, Arrays.copyOfRange(fileNameParts, 0, fileNameParts.length - 1));
 
     }
 

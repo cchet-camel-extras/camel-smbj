@@ -74,7 +74,7 @@ public class SmbFileOperations implements GenericFileOperations<SmbFile> {
         if (name.startsWith("\\")) {
             return name.replaceFirst(Matcher.quoteReplacement("\\"), "");
         }
-        return name;
+        return name.replaceAll("/", "\\");
     }
 
     /**
@@ -323,26 +323,27 @@ public class SmbFileOperations implements GenericFileOperations<SmbFile> {
 
     @Override
     public List<SmbFile> listFiles(final String path) throws GenericFileOperationFailedException {
+        final String normalizedPath = normalizeFileNameOrPath(path);
         try {
             return invokeOnDiskShare(share -> {
-                if (!share.fileExists(path) && !share.folderExists(path)) {
+                if (!share.fileExists(normalizedPath) && !share.folderExists(normalizedPath)) {
                     return Collections.emptyList();
                 }
                 // Lock strategy wants to list files with filename, which is not supported by smbj
-                if (share.fileExists(path)) {
-                    final FileAllInformation info = share.getFileInformation(path, FileAllInformation.class);
-                    return Collections.singletonList(mapFileInformationToSmbFile(path, info));
+                if (share.fileExists(normalizedPath)) {
+                    final FileAllInformation info = share.getFileInformation(normalizedPath, FileAllInformation.class);
+                    return Collections.singletonList(mapFileInformationToSmbFile(normalizedPath, info));
                 }
 
-                return share.list(path).stream()
+                return share.list(normalizedPath).stream()
                             // Exclude Linux . and .. directories
                             .filter(entry -> !entry.getFileName().equals("."))
                             .filter(entry -> !entry.getFileName().equals(".."))
-                            .map(info -> mapFileInformationToSmbFile(path, info))
+                            .map(info -> mapFileInformationToSmbFile(normalizedPath, info))
                             .collect(Collectors.toList());
             });
         } catch (Exception e) {
-            throw new GenericFileOperationFailedException(String.format("Could not list files for path: '%s'", path), e);
+            throw new GenericFileOperationFailedException(String.format("Could not list files for path: '%s'", normalizedPath), e);
         }
     }
 
