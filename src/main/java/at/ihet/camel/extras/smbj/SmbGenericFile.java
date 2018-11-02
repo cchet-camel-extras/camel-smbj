@@ -26,11 +26,6 @@ import org.apache.camel.component.file.GenericFile;
 public class SmbGenericFile extends GenericFile<SmbFile> {
 
     @Override
-    public char getFileSeparator() {
-        return '\\';
-    }
-
-    @Override
     public String toString() {
         return String.format("absoluteFilePath: %s %srelativeFilePath: %s %sfileName: %s%sfileNameOnly: %s%s",
                              getAbsoluteFilePath(), System.lineSeparator(),

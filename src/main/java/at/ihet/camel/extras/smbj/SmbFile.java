@@ -49,13 +49,13 @@ public class SmbFile {
         this.isHidden = isHidden;
         this.isReadOnly = isReadOnly;
         this.isSystem = isSystem;
-        this.fileNameFull = fileNameFull;
         this.fileLength = fileLength;
         this.lastModified = lastModified;
 
         final String[] fileNameParts = fileNameFull.split(Matcher.quoteReplacement("\\|/"));
         fileName = fileNameParts[fileNameParts.length - 1];
-        parentDirectory = String.join(File.pathSeparator, Arrays.copyOfRange(fileNameParts, 0, fileNameParts.length - 1));
+        parentDirectory = String.join(File.separator, Arrays.copyOfRange(fileNameParts, 0, fileNameParts.length - 1));
+        this.fileNameFull = parentDirectory + File.separator + fileName;
 
     }
 
