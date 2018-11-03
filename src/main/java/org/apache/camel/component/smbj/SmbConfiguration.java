@@ -20,7 +20,10 @@ import com.hierynomus.mssmb2.SMB2Dialect;
 import com.hierynomus.smbj.SmbConfig;
 import com.hierynomus.smbj.auth.AuthenticationContext;
 import org.apache.camel.component.file.GenericFileConfiguration;
+import org.apache.camel.spi.Metadata;
 import org.apache.camel.spi.UriParam;
+import org.apache.camel.spi.UriPath;
+import org.apache.camel.util.StringHelper;
 
 import java.net.URI;
 import java.util.*;
@@ -36,44 +39,76 @@ public class SmbConfiguration extends GenericFileConfiguration {
 
     private final SmbConfig.Builder builder;
 
-    @UriParam(name = "domain", defaultValue = "", defaultValueNote = "No domain is assumed as default", description = "The domain for the authentication", javaType = "java.lang.String")
+    @UriPath(description = "The host to connect to", javaType = "java.lang.String")
+    @Metadata(required = "true")
+    private String host;
+    @UriPath(description = "The port to use", javaType = "java.lang.String")
+    private Integer port;
+    @UriParam(defaultValue = "", defaultValueNote = "No domain is assumed as default", description = "The domain for the authentication", javaType = "java.lang.String")
     private String domain = "";
-    @UriParam(name = "username", description = "The username for the authentication", javaType = "java.lang.String")
+    @UriPath(description = "The name of the share to connect to", javaType = "java.lang.String")
+    @Metadata(required = "true")
+    private String share;
+    @UriParam(label = "secret", secret = true, description = "The username for the authentication", javaType = "java.lang.String")
     private String username;
-    @UriParam(name = "password", description = "The password for the authentication", javaType = "java.lang.String", secret = true)
+    @UriParam(label = "secret", secret = true, description = "The password for the authentication", javaType = "java.lang.String")
     private String password;
-    @UriParam(name = "versions", defaultValue = "unkown", defaultValueNote = "Client will determine what dialect to use", description = "The comma separated list of versions to use [unkown|2_0_2|2_1|2xx]", javaType = "java.lang.String")
+    @UriParam(defaultValue = "unkown", defaultValueNote = "Client will determine what dialect to use", description = "The comma separated list of versions to use [unkown|2_0_2|2_1|2xx]", javaType = "java.lang.String")
     private String versions = "unkown";
-    @UriParam(name = "authType", defaultValue = "ntlm", defaultValueNote = "USe NTLM authentication as default", description = "The authentication type to use default: ntlm or spnego", javaType = "java.lang.String")
+    @UriParam(defaultValue = "ntlm", defaultValueNote = "USe NTLM authentication as default", description = "The authentication type to use default: ntlm or spnego", javaType = "java.lang.String")
     private String authType = "ntlm";
-    @UriParam(name = "dfs", defaultValue = "false", defaultValueNote = "Assuming that no DFS services are available", description = "True if DFS services are available, false otherwise", javaType = "java.lang.Boolean")
+    @UriParam(defaultValue = "false", defaultValueNote = "Assuming that no DFS services are available", description = "True if DFS services are available, false otherwise", javaType = "java.lang.Boolean")
     private Boolean dfs = false;
-    @UriParam(name = "multiProtocol", defaultValue = "false", defaultValueNote = "Assuming that no multiple protocols are supported", description = "True if multi protocols are available, false otherwise", javaType = "java.lang.Boolean")
+    @UriParam(defaultValue = "false", defaultValueNote = "Assuming that no multiple protocols are supported", description = "True if multi protocols are available, false otherwise", javaType = "java.lang.Boolean")
     private Boolean multiProtocol = false;
-    @UriParam(name = "signing", defaultValue = "false", defaultValueNote = "Assuming that no sign in is required", description = "True if sign in is required, false otherwise", javaType = "java.lang.Boolean")
+    @UriParam(defaultValue = "false", defaultValueNote = "Assuming that no sign in is required", description = "True if sign in is required, false otherwise", javaType = "java.lang.Boolean")
     private Boolean signing = false;
-    @UriParam(name = "uuid", description = "The uuid to use for the client", javaType = "java.lang.String")
+    @UriParam(description = "The uuid to use for the client", javaType = "java.lang.String")
     private String uuid;
-    @UriParam(name = "bufferSize", defaultValue = "1048576", defaultValueNote = "1048576 bytes default buffer size for read/write", description = "The read/write buffer size in bytes to use", javaType = "java.lang.Integer")
+    @UriParam(defaultValue = "1048576", defaultValueNote = "1048576 bytes default buffer size for read/write", description = "The read/write buffer size in bytes to use", javaType = "java.lang.Integer")
     private Integer bufferSize = 1048576;
-    @UriParam(name = "readBufferSize", description = "The read buffer size to use", javaType = "java.lang.Integer")
+    @UriParam(description = "The read buffer size to use", javaType = "java.lang.Integer")
     private Integer readBufferSize;
-    @UriParam(name = "writeBufferSize", description = "The write buffer size to use", javaType = "java.lang.Integer")
+    @UriParam(description = "The write buffer size to use", javaType = "java.lang.Integer")
     private Integer writeBufferSize;
-    @UriParam(name = "timeout", defaultValue = "60000", defaultValueNote = "Default read/write timeout is 60000ms", description = "The read/write timeout in milliseconds", javaType = "java.lang.Integer")
+    @UriParam(defaultValue = "60000", defaultValueNote = "Default read/write timeout is 60000ms", description = "The read/write timeout in milliseconds", javaType = "java.lang.Integer")
     private Integer timeout = 60000;
-    @UriParam(name = "readTimeout", description = "The read timeout in milliseconds", javaType = "java.lang.Integer")
+    @UriParam(description = "The read timeout in milliseconds", javaType = "java.lang.Integer")
     private Integer readTimeout;
-    @UriParam(name = "writeTimeout", description = "The write timeout in milliseconds", javaType = "java.lang.Integer")
+    @UriParam(description = "The write timeout in milliseconds", javaType = "java.lang.Integer")
     private Integer writeTimeout;
-    @UriParam(name = "socketTimeout", defaultValue = "60000", defaultValueNote = "Default socket timeout is 60000ms", description = "The socket timeout in milliseconds", javaType = "java.lang.Integer")
+    @UriParam(defaultValue = "60000", defaultValueNote = "Default socket timeout is 60000ms", description = "The socket timeout in milliseconds", javaType = "java.lang.Integer")
     private Integer socketTimeout = 60000;
-    @UriParam(name = "transactTimeout", defaultValue = "60000", defaultValueNote = "Default transaction timeout is 60000ms", description = "The transaction timeout in milliseconds", javaType = "java.lang.Integer")
+    @UriParam(defaultValue = "60000", defaultValueNote = "Default transaction timeout is 60000ms", description = "The transaction timeout in milliseconds", javaType = "java.lang.Integer")
     private Integer transactTimeout = 60000;
 
     public SmbConfiguration(final URI uri) {
         this.builder = SmbConfig.builder();
         configure(uri);
+    }
+
+    @Override
+    public void configure(URI uri) {
+        super.configure(uri);
+
+        // UserInfo can contain both username and password as: user:pwd@ftpserver
+        // see: http://en.wikipedia.org/wiki/URI_scheme
+        String username = uri.getUserInfo();
+        String pw = null;
+        if (username != null && username.contains(":")) {
+            pw = StringHelper.after(username, ":");
+            username = StringHelper.before(username, ":");
+        }
+        if (username != null) {
+            setUsername(username);
+        }
+        if (pw != null) {
+            setPassword(pw);
+        }
+
+        setHost(uri.getHost());
+        setPort((uri.getPort() <= 0) ? null : uri.getPort());
+        setShare(getDirectory());
         setDirectory("");
     }
 
@@ -132,6 +167,30 @@ public class SmbConfiguration extends GenericFileConfiguration {
 
     public void setDomain(String domain) {
         this.domain = domain;
+    }
+
+    public String getHost() {
+        return host;
+    }
+
+    public void setHost(String host) {
+        this.host = host;
+    }
+
+    public Integer getPort() {
+        return port;
+    }
+
+    public void setPort(Integer port) {
+        this.port = port;
+    }
+
+    public String getShare() {
+        return share;
+    }
+
+    public void setShare(String share) {
+        this.share = share;
     }
 
     public String getUsername() {

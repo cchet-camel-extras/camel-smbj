@@ -23,6 +23,8 @@ import java.net.URI;
 import java.util.Map;
 
 /**
+ * To consume and produce to smb shares.
+ *
  * @author Thomas Herzog <herzog.thomas81@gmail.com>
  * @since 10/26/2018
  */

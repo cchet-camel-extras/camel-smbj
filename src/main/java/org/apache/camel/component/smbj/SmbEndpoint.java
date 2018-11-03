@@ -25,20 +25,19 @@ import org.apache.camel.impl.DefaultExchange;
 import org.apache.camel.processor.idempotent.MemoryIdempotentRepository;
 import org.apache.camel.spi.UriEndpoint;
 import org.apache.camel.spi.UriParam;
+import org.apache.camel.spi.UriPath;
 
-import java.net.URI;
 import java.util.Map;
 
 /**
  * @author Thomas Herzog <herzog.thomas81@gmail.com>
  * @since 10/26/2018
  */
-@UriEndpoint(scheme = "smb", title = "SMB", syntax = "smb://server[:port]/share[?options]", consumerClass = SmbConsumer.class)
+@UriEndpoint(scheme = "smb", title = "SMBJ", label = "SMBJ", syntax = "smb://server[:port]/share[?options]", consumerClass = SmbConsumer.class)
 public class SmbEndpoint extends GenericFileEndpoint<SmbFile> {
 
-    private String host;
-    private Integer port;
-    private String share;
+    @UriPath(description = "SMB connection string host[:port]/share")
+    private String connectionString;
 
     @UriParam(name = "download", defaultValue = "false", defaultValueNote = "Per default files are not downloaded", description = "True if file download is intended, false otherwise", javaType = "java.lang.Boolean")
     private Boolean download = false;
@@ -51,9 +50,6 @@ public class SmbEndpoint extends GenericFileEndpoint<SmbFile> {
         super(endpointUri, component);
         if (configuration != null) {
             this.configuration = configuration;
-        }
-        if (endpointUri != null) {
-            configure(URI.create(endpointUri));
         }
     }
 
@@ -134,42 +130,14 @@ public class SmbEndpoint extends GenericFileEndpoint<SmbFile> {
         return map;
     }
 
-    private void configure(URI uri) {
-        setHost(uri.getHost());
-        if (uri.getPort() <= 0) {
-            setPort(null);
-        } else {
-            setPort(uri.getPort());
-        }
-        if (uri.getPath().chars().filter(c -> c == '\\').filter(c -> c == '/').count() > 1) {
-            throw new IllegalArgumentException(String.format("URI path cannot contain '%s' or '%s' characters", "\\", "/"));
-        }
-        setShare(uri.getPath().replaceAll("\\\\", "").replace("/", ""));
-    }
-
     //<editor-fold desc="Getter and Setter">
-    public String getHost() {
-        return host;
+
+    public String getConnectionString() {
+        return connectionString;
     }
 
-    public void setHost(String host) {
-        this.host = host;
-    }
-
-    public Integer getPort() {
-        return port;
-    }
-
-    public void setPort(Integer port) {
-        this.port = port;
-    }
-
-    public String getShare() {
-        return share;
-    }
-
-    public void setShare(String share) {
-        this.share = share;
+    public void setConnectionString(String connectionString) {
+        this.connectionString = connectionString;
     }
 
     public Boolean getDownload() {

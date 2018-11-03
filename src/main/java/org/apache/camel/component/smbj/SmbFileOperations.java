@@ -409,10 +409,10 @@ public class SmbFileOperations implements GenericFileOperations<SmbFile> {
      */
     private Connection createConnection() {
         try {
-            if (endpoint.getPort() == null) {
-                return client.connect(endpoint.getHost());
+            if (endpoint.getConfiguration().getPort() == null) {
+                return client.connect(endpoint.getConfiguration().getHost());
             } else {
-                return client.connect(endpoint.getHost(), endpoint.getPort());
+                return client.connect(endpoint.getConfiguration().getHost(), endpoint.getConfiguration().getPort());
             }
         } catch (IOException e) {
             throw new GenericFileOperationFailedException("Could not create connection", e);
@@ -439,7 +439,7 @@ public class SmbFileOperations implements GenericFileOperations<SmbFile> {
      * @return the created disk share
      */
     private DiskShare createShare(final Session session) {
-        return (DiskShare) session.connectShare(endpoint.getShare());
+        return (DiskShare) session.connectShare(endpoint.getConfiguration().getShare());
     }
 
     /**
