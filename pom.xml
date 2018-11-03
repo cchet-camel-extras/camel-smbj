@@ -20,46 +20,26 @@
         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd"
         xmlns="http://maven.apache.org/POM/4.0.0">
     <modelVersion>4.0.0</modelVersion>
-    <groupId>at.ihet.camel.extras</groupId>
+    <parent>
+        <groupId>org.apache.camel</groupId>
+        <artifactId>components</artifactId>
+        <version>2.21.0</version>
+    </parent>
+
     <artifactId>camel-smbj</artifactId>
-    <version>0.0.1-SNAPSHOT</version>
     <packaging>jar</packaging>
-    <name>camel-smbj</name>
-    <description>camel-cifs: A camel extra library which brings in cifs/samba share support</description>
+    <name>Camel :: SMBJ</name>
+    <description>Camel SMBJ support</description>
 
     <properties>
-        <!-- Build Properties -->
-        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-        <maven.compiler.target>1.8</maven.compiler.target>
-        <maven.compiler.source>1.8</maven.compiler.source>
-        <downloadSources>true</downloadSources>
-        <maven.min.version>3.5</maven.min.version>
-        <jdk.min.version>${maven.compiler.source}</jdk.min.version>
-
-        <!-- Plugin versions -->
-        <version.maven-compiler-plugin>3.8.0</version.maven-compiler-plugin>
-        <version.maven-surefire-plugin>2.22.1</version.maven-surefire-plugin>
-        <version.maven-enforcer-plugin>3.0.0-M2</version.maven-enforcer-plugin> 
-        <version.maven-resources-plugin>3.1.0</version.maven-resources-plugin>
-        <version.maven-sources-plugin>3.0.1</version.maven-sources-plugin>
+        <camel.osgi.export.pkg>org.apache.camel.component.smbj.*</camel.osgi.export.pkg>
+        <camel.osgi.export.service>
+            org.apache.camel.spi.ComponentResolver;component=smbj
+        </camel.osgi.export.service>
 
         <!-- Dependency versions -->
-        <version.camel>2.21.0</version.camel> <!-- Need this version because of customer used Red Had Fuse 7.1 which uses this camel version -->
         <version.smbj>0.9.0</version.smbj>
     </properties>
-
-    <dependencyManagement>
-        <dependencies>
-            <!-- https://mvnrepository.com/artifact/org.apache.camel/camel-bom -->
-            <dependency>
-                <groupId>org.apache.camel</groupId>
-                <artifactId>camel-bom</artifactId>
-                <version>${version.camel}</version>
-                <type>pom</type>
-                <scope>import</scope>
-            </dependency>
-        </dependencies>
-    </dependencyManagement>
 
     <dependencies>
         <!-- Provided Dependencies -->
@@ -83,94 +63,4 @@
             </exclusions>
         </dependency>
     </dependencies>
-
-    <build>
-        <plugins>
-            <plugin>
-                <groupId>org.apache.maven.plugins</groupId>
-                <artifactId>maven-enforcer-plugin</artifactId>
-                <version>${version.maven-enforcer-plugin}</version>
-                <executions>
-                    <execution>
-                        <id>enforce-java-version</id>
-                        <goals>
-                            <goal>enforce</goal>
-                        </goals>
-                        <configuration>
-                            <rules>
-                                <requireJavaVersion>
-                                    <message>To build this project JDK ${jdk.min.version} (or
-                                        greater) is required. Please install it.
-                                    </message>
-                                    <version>${jdk.min.version}</version>
-                                </requireJavaVersion>
-                            </rules>
-                        </configuration>
-                    </execution>
-                    <execution>
-                        <id>enforce-maven-version</id>
-                        <goals>
-                            <goal>enforce</goal>
-                        </goals>
-                        <configuration>
-                            <rules>
-                                <requireMavenVersion>
-                                    <message>To build this project Maven ${maven.min.version} (or
-                                        greater) is required. Please install it.
-                                    </message>
-                                    <version>${maven.min.version}</version>
-                                </requireMavenVersion>
-                            </rules>
-                        </configuration>
-                    </execution>
-                </executions>
-            </plugin>
-
-            <plugin>
-                <groupId>org.apache.maven.plugins</groupId>
-                <artifactId>maven-compiler-plugin</artifactId>
-                <version>${version.maven-compiler-plugin}</version>
-                <configuration>
-                    <source>${maven.compiler.source}</source>
-                    <target>${maven.compiler.target}</target>
-                </configuration>
-            </plugin>
-
-            <plugin>
-                <groupId>org.apache.maven.plugins</groupId>
-                <artifactId>maven-surefire-plugin</artifactId>
-                <version>${version.maven-surefire-plugin}</version>
-                <configuration>
-                    <systemPropertyVariables>
-                        <swarm.project.stage>test</swarm.project.stage>
-                    </systemPropertyVariables>
-                </configuration>
-            </plugin>
-
-            <plugin>
-                <groupId>org.apache.maven.plugins</groupId>
-                <artifactId>maven-resources-plugin</artifactId>
-                <version>${version.maven-resources-plugin}</version>
-                <executions>
-                    <execution>
-                        <phase>process-resources</phase>
-                    </execution>
-                </executions>
-            </plugin>
-            <plugin>
-                <groupId>org.apache.maven.plugins</groupId>
-                <artifactId>maven-source-plugin</artifactId>
-                <version>${version.maven-sources-plugin}</version>
-                <executions>
-                    <execution>
-                        <id>attach-sources</id>
-                        <phase>verify</phase>
-                        <goals>
-                            <goal>jar-no-fork</goal>
-                        </goals>
-                    </execution>
-                </executions>
-            </plugin>
-        </plugins>
-    </build>
 </project>

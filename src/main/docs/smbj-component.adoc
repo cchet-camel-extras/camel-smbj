@@ -1,0 +1,29 @@
+[[smbj-component]]
+== SMBJ Component
+
+*Available as of Camel version 2.23*
+
+This component provides access to remote file systems over the SMB protocol.
+
+When consuming from a SMB share make sure you read the section titled _Default when consuming files_
+further below for details related to consuming files.
+
+Maven users will need to add the following dependency to their `pom.xml`
+for this component:
+
+[source,xml]
+----
+<dependency>
+    <groupId>org.apache.camel</groupId>
+    <artifactId>camel-smbj</artifactId>
+    <version>x.x.x</version>See the documentation of the Apache Commons
+    <!-- use the same version as your Camel core version -->
+</dependency>
+----
+
+=== URI format
+
+[source,java]
+----
+smb://[username@]hostname[:port]/directoryname[?options]
+----
