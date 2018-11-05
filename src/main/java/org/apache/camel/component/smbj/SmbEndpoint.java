@@ -33,7 +33,7 @@ import java.util.Map;
  * @author Thomas Herzog <herzog.thomas81@gmail.com>
  * @since 10/26/2018
  */
-@UriEndpoint(scheme = "smb", title = "SMBJ", label = "SMBJ", syntax = "smb://[username[:password]@]server[:port]/share[?options]", consumerClass = SmbConsumer.class)
+@UriEndpoint(scheme = "smb", title = "SMBJ", label = "SMBJ", syntax = "smb://[username[:password]@]server[:port]/share{/directory}[?options]", consumerClass = SmbConsumer.class)
 public class SmbEndpoint extends GenericFileEndpoint<SmbFile> {
 
     @UriPath(description = "SMB connection string host[:port]/share")
