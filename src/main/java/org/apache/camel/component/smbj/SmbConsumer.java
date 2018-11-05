@@ -18,9 +18,7 @@ package org.apache.camel.component.smbj;
 
 import org.apache.camel.Message;
 import org.apache.camel.Processor;
-import org.apache.camel.component.file.GenericFile;
-import org.apache.camel.component.file.GenericFileConsumer;
-import org.apache.camel.component.file.GenericFileOperations;
+import org.apache.camel.component.file.*;
 import org.apache.camel.util.FileUtil;
 
 import java.util.*;
@@ -33,12 +31,14 @@ import java.util.*;
  */
 public class SmbConsumer extends GenericFileConsumer<SmbFile> {
 
-    public SmbConsumer(SmbEndpoint endpoint,
+    public SmbConsumer(GenericFileEndpoint<SmbFile> endpoint,
                        Processor processor,
-                       GenericFileOperations<SmbFile> operations) {
+                       GenericFileOperations<SmbFile> operations,
+                       GenericFileProcessStrategy<SmbFile> processStrategy) {
         super(Objects.requireNonNull(endpoint, "Cannot create consumer with null endpoint"),
               Objects.requireNonNull(processor, "Cannot create consumer with null processor"),
-              Objects.requireNonNull(operations, "Cannot create consumer with null operations"));
+              Objects.requireNonNull(operations, "Cannot create consumer with null operations"),
+              Objects.requireNonNull(processStrategy, "Cannot create consumer with null processStrategy"));
     }
 
     @Override

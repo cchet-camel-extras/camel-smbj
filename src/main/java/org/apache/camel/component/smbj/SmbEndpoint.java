@@ -77,7 +77,8 @@ public class SmbEndpoint extends GenericFileEndpoint<SmbFile> {
         fileOperations.setEndpoint(this);
         SmbConsumer consumer = new SmbConsumer(this,
                                                processor,
-                                               fileOperations);
+                                               fileOperations,
+                                               (processStrategy != null) ? processStrategy : createGenericFileStrategy());
         consumer.setMaxMessagesPerPoll(getMaxMessagesPerPoll());
         consumer.setEagerLimitMaxMessagesPerPoll(isEagerMaxMessagesPerPoll());
         configureConsumer(consumer);
