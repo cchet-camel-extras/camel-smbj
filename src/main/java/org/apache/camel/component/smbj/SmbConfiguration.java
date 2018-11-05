@@ -25,6 +25,7 @@ import org.apache.camel.spi.UriParam;
 import org.apache.camel.spi.UriPath;
 import org.apache.camel.util.StringHelper;
 
+import java.io.File;
 import java.net.URI;
 import java.util.*;
 import java.util.concurrent.TimeUnit;
@@ -106,10 +107,17 @@ public class SmbConfiguration extends GenericFileConfiguration {
             setPassword(pw);
         }
 
+        // Extract share name and directory path within share
+        final String[] pathParts = uri.getPath().split("/");
+        if (pathParts.length > 2) {
+            setDirectory("/" + String.join(File.separator, Arrays.copyOfRange(pathParts, 2, pathParts.length)));
+        } else {
+            setDirectory("/");
+        }
+
+        setShare(pathParts[1]);
         setHost(uri.getHost());
         setPort((uri.getPort() <= 0) ? null : uri.getPort());
-        setShare(getDirectory());
-        setDirectory("");
     }
 
     public SmbConfig getSmbConfig() {
