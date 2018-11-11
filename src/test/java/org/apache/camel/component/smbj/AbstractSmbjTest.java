@@ -17,13 +17,12 @@
 package org.apache.camel.component.smbj;
 
 import org.apache.camel.test.testcontainers.ContainerAwareTestSupport;
-import org.apache.camel.test.testcontainers.Wait;
-import org.testcontainers.containers.BindMode;
-import org.testcontainers.containers.GenericContainer;
+import org.junit.AfterClass;
+import org.junit.BeforeClass;
 
 import java.io.File;
-import java.nio.file.Paths;
-import java.util.Arrays;
+import java.io.IOException;
+import java.nio.file.*;
 
 /**
  * @author Thomas Herzog <herzog.thomas81@gmail.com>
@@ -33,32 +32,48 @@ public abstract class AbstractSmbjTest extends ContainerAwareTestSupport {
 
     protected static final String CONTAINER_IMAGE = "dperson/samba:latest";
     protected static final String CONTAINER_NAME = "smbj";
-    protected static final String SMB_SHARE_DIR = System.getProperty("java.io.tmpdir") + "camel-smbj-test-share";
-    protected static final String SMB_SHARE_SOURCE_DIR = "/shares/source";
-    protected static final String SMB_SHARE_TARGET_DIR = "/shares/target";
+    protected static final String WORK_DIR = getTmpDir() + "camel-smbj-test-share";
+    protected static final String SMB_DIR = WORK_DIR + File.separator + "smb-share";
+    protected static final String SMB_TMP_DIR = WORK_DIR + File.separator + "smb-tmp";
 
-    protected static void cleanupTestSharecontent() {
-        final File dir = Paths.get(SMB_SHARE_DIR).toFile();
-        if (dir.isDirectory()) {
-            Arrays.stream(dir.listFiles()).forEach(File::delete);
+    @BeforeClass
+    public static void beforeTest() throws IOException {
+        deleteDirectoryRecursion(Paths.get(WORK_DIR));
+        Files.createDirectories(Paths.get(SMB_TMP_DIR));
+    }
+
+    @AfterClass
+    public static void afterTest() throws IOException {
+        deleteDirectoryRecursion(Paths.get(WORK_DIR));
+    }
+
+    protected static void cleanupTmpDirectory() throws IOException {
+        cleanupDirectory(Paths.get(SMB_TMP_DIR));
+    }
+
+    protected static String getTmpDir() {
+        return System.getProperty("java.io.tmpdir");
+    }
+
+    protected static void cleanupDirectory(final Path dirPath) throws IOException {
+        if (Files.isDirectory(dirPath)) {
+            deleteDirectoryRecursion(dirPath);
+            Files.createDirectories(dirPath);
         }
     }
 
-    @Override
-    protected GenericContainer<?> createContainer() {
-        final GenericContainer container = new GenericContainer(CONTAINER_IMAGE)
-                .withNetworkAliases(CONTAINER_NAME)
-                // Here we have the share directory
-                .withFileSystemBind(SMB_SHARE_DIR, "/share", BindMode.READ_WRITE)
-                .withCommand("-u", "source;source",
-                             "-u", "target;target",
-                             "-s", String.format("source;%s;yes;no;no;source;source;source", SMB_SHARE_SOURCE_DIR),
-                             "-s", String.format("target;%s;yes;no;no;target;target;target", SMB_SHARE_TARGET_DIR),
-                             "-W")
-                .waitingFor(Wait.forLogMessageContaining("ready to serve connections", 1));
-        // The ports to connect to smb share
-        container.setPortBindings(Arrays.asList("50137:137", "50138:138", "50139:139", "50445:445"));
-
-        return container;
+    private static void deleteDirectoryRecursion(Path path) throws IOException {
+        if (Files.isDirectory(path, LinkOption.NOFOLLOW_LINKS)) {
+            try (DirectoryStream<Path> entries = Files.newDirectoryStream(path)) {
+                for (Path entry : entries) {
+                    deleteDirectoryRecursion(entry);
+                }
+            }
+        }
+        Files.deleteIfExists(path);
     }
+
+    protected abstract String createSmbBaseUri();
+
+    protected abstract void cleanupDirectories() throws IOException;
 }
