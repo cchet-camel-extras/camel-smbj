@@ -21,49 +21,47 @@ import org.apache.camel.Exchange;
 import org.apache.camel.RoutesBuilder;
 import org.apache.camel.builder.RouteBuilder;
 import org.apache.camel.component.mock.MockEndpoint;
-import org.apache.camel.util.FileUtil;
-import org.junit.Before;
 import org.junit.Test;
 
 import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
-import java.util.Properties;
 
 /**
  * @author Thomas Herzog <herzog.thomas81@gmail.com>
  * @since 11/5/2018
  */
-public class SmbjConsumerAuthTest extends SmbjAuthConsumerTestSupport {
+public class SmbjConsumerTest extends SmbjAuthConsumerTestSupport {
 
     @EndpointInject(uri = "mock:result")
     private MockEndpoint mockEndpoint;
 
-    @Before
-    public void beforeAndAfter() throws IOException {
-        cleanupDirectories();
+    @Test
+    public void consumerRoute_withSingleSharedFile_mustBeConsumed() throws InterruptedException, IOException {
+        // -- Given --
+        final String actualFileName = "test.txt";
+        createTestFileForShare(actualFileName);
+        mockEndpoint.expectedMessageCount(1);
+        mockEndpoint.expectedHeaderReceived(Exchange.FILE_NAME_ONLY, actualFileName);
+
+        // -- When --
+        mockEndpoint.setAssertPeriod(500);
+
+        // -- Then --
+        mockEndpoint.assertIsSatisfied();
     }
 
     @Test
-    public void consumerRoute_withAuth_mustBeValid() throws InterruptedException, IOException {
+    public void consumerRoute_withExistingFile_mustNotBeConsumed() throws InterruptedException, IOException {
         // -- Given --
-        final Path testFile = Paths.get(FileUtil.normalizePath(WORK_DIR + "/test.txt"));
-        final Path smbShareFile = Paths.get(FileUtil.normalizePath(SMB_SHARE_DIR + "/test.txt"));
-        final Path expectedFile = Paths.get(FileUtil.normalizePath(SMB_SHARE_DIR + "/.processed/test.txt"));
-        System.setProperties(new Properties() {{
-            setProperty("test.smb.user", SMB_USER);
-            setProperty("test.smb.pwd", SMB_PWD);
-        }});
-        mockEndpoint.expectedMessageCount(1);
-        mockEndpoint.expectedHeaderReceived(Exchange.FILE_NAME_ONLY, smbShareFile.toFile().getName());
+        final String actualFileName = "test.txt";
+        createTestFileForShare(actualFileName);
+        // TODO: Doesn't work because copy file to container demands an existing directory
+        createTestFileForShare(actualFileName, ".consumed");
+        mockEndpoint.expectedMessageCount(0);
 
         // -- When --
-        final Path path = Files.createFile(testFile);
-        Files.move(path, smbShareFile);
+        mockEndpoint.setAssertPeriod(500);
 
         // -- Then --
-        mockEndpoint.setAssertPeriod(500);
         mockEndpoint.assertIsSatisfied();
     }
 
@@ -77,7 +75,7 @@ public class SmbjConsumerAuthTest extends SmbjAuthConsumerTestSupport {
         return new RouteBuilder() {
             @Override
             public void configure() throws Exception {
-                from("smb://" + createSmbBaseUri() + "&delete=true&delay=100").to(mockEndpoint);
+                from("smb://" + createSmbBaseUri() + "&delay=100&move=.consumed&fileExist=Move&moveExisting=.exists&moveFailed=.failed").to(mockEndpoint);
             }
         };
     }

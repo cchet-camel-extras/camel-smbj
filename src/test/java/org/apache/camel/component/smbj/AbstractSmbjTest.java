@@ -20,7 +20,6 @@ import org.apache.camel.test.testcontainers.ContainerAwareTestSupport;
 import org.junit.AfterClass;
 import org.junit.BeforeClass;
 
-import java.io.File;
 import java.io.IOException;
 import java.nio.file.*;
 
@@ -32,23 +31,17 @@ public abstract class AbstractSmbjTest extends ContainerAwareTestSupport {
 
     protected static final String CONTAINER_IMAGE = "dperson/samba:latest";
     protected static final String CONTAINER_NAME = "smbj";
-    protected static final String WORK_DIR = getTmpDir() + "camel-smbj-test-share";
-    protected static final String SMB_DIR = WORK_DIR + File.separator + "smb-share";
-    protected static final String SMB_TMP_DIR = WORK_DIR + File.separator + "smb-tmp";
+    protected static final String WORK_DIR = getTmpDir() + "camel-smbj-test";
 
     @BeforeClass
-    public static void beforeTest() throws IOException {
-        deleteDirectoryRecursion(Paths.get(WORK_DIR));
-        Files.createDirectories(Paths.get(SMB_TMP_DIR));
+    public static void beforeTests() throws IOException {
+        afterTests();
+        Files.createDirectories(Paths.get(WORK_DIR));
     }
 
     @AfterClass
-    public static void afterTest() throws IOException {
+    public static void afterTests() throws IOException {
         deleteDirectoryRecursion(Paths.get(WORK_DIR));
-    }
-
-    protected static void cleanupTmpDirectory() throws IOException {
-        cleanupDirectory(Paths.get(SMB_TMP_DIR));
     }
 
     protected static String getTmpDir() {
@@ -69,11 +62,16 @@ public abstract class AbstractSmbjTest extends ContainerAwareTestSupport {
                     deleteDirectoryRecursion(entry);
                 }
             }
+        } else {
+            Files.deleteIfExists(path);
         }
-        Files.deleteIfExists(path);
     }
+
+    protected abstract String createTestFileForShare(final String fileName,
+                                                     final String... directories) throws IOException;
 
     protected abstract String createSmbBaseUri();
 
-    protected abstract void cleanupDirectories() throws IOException;
+    protected abstract String createSmbBaseUri(String username,
+                                               String pwd);
 }
